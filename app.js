@@ -8625,36 +8625,6 @@ function updateShadowEditorFromControls() {
   drawImageData(currentImageData);
 }
 
-function addOutlinePreviewImageData(imageData, options = {}) {
-  const radius = Math.max(1, Math.min(12, Math.round(Number(options.size) || 2)));
-  const sourceCanvas = document.createElement("canvas");
-  sourceCanvas.width = imageData.width;
-  sourceCanvas.height = imageData.height;
-  sourceCanvas.getContext("2d").putImageData(imageData, 0, 0);
-
-  const maskCanvas = document.createElement("canvas");
-  maskCanvas.width = imageData.width;
-  maskCanvas.height = imageData.height;
-  const maskCtx = maskCanvas.getContext("2d");
-  maskCtx.drawImage(sourceCanvas, 0, 0);
-  maskCtx.globalCompositeOperation = "source-in";
-  maskCtx.fillStyle = options.color || "#ffffff";
-  maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-
-  const output = document.createElement("canvas");
-  output.width = imageData.width + radius * 2;
-  output.height = imageData.height + radius * 2;
-  const outputCtx = output.getContext("2d", { willReadFrequently: true });
-  for (let y = -radius; y <= radius; y += 1) {
-    for (let x = -radius; x <= radius; x += 1) {
-      if (x * x + y * y > radius * radius) continue;
-      outputCtx.drawImage(maskCanvas, radius + x, radius + y);
-    }
-  }
-  outputCtx.drawImage(sourceCanvas, radius, radius);
-  return outputCtx.getImageData(0, 0, output.width, output.height);
-}
-
 function currentOutlinePreviewRecord() {
   if (processingSource === "sequence") {
     const frame = activeFrameIndex >= 0 ? sequenceFrames[activeFrameIndex] : null;
@@ -8744,9 +8714,7 @@ function previewOutline(options = {}) {
   const previewSize = useFastProxy
     ? Math.max(1, Math.round(size * previewBase.width / outlinePreviewBaseImageData.width))
     : size;
-  const next = options.fast
-    ? addOutlinePreviewImageData(previewBase, { color, size: previewSize })
-    : addOutlineImageData(previewBase, { color, size: previewSize });
+  const next = addOutlineImageData(previewBase, { color, size: previewSize });
   showResultMode();
   if (useFastProxy) {
     renderOutlineProxyPreview(next);
@@ -8778,7 +8746,7 @@ function beginOutlineEditing() {
   outlinePreviewBaseImageData = record.imageData;
   outlinePreviewProxyImageData = record.previewImageData || null;
   setOutlineEditingUi(true);
-  previewOutline({ fast: true });
+  setStatus("已进入描边调整。移动颜色或强度控件可预览，点击“确认描边”后才会应用。");
 }
 
 function addOutline() {
@@ -8798,6 +8766,10 @@ function addOutline() {
     size: Number(outlineStrength?.value) || 1
   };
   const message = `已添加 ${options.size}px 描边`;
+  const confirmedTarget = outlinePreviewTarget;
+  const confirmedBase = outlinePreviewBaseImageData
+    ? cloneImageData(outlinePreviewBaseImageData)
+    : cloneImageData(record.imageData);
   const frames = targetFrames();
   if (frames.length > 0 && !frames.some((frame) => hasTransparentPixels(frame.imageData))) {
     clearOutlinePreviewState({ restore: true });
@@ -8808,19 +8780,22 @@ function addOutline() {
   if (transformFrames("outline", options, message)) {
     return;
   }
-  const targets = targetItems();
-  if (targets.length === 0) return;
-  if (!targets.some((item) => hasTransparentPixels(item.currentImageData))) {
+  const records = sourceRecordsForProcessing();
+  if (records.length === 0) return;
+  if (!records.some((item) => hasTransparentPixels(item.imageData))) {
     setStatus("当前图片没有透明区域，请先抠图或净化透明背景后再添加描边。");
     return;
   }
-  const transform = (item) => {
-    item.originalImageData = addOutlineImageData(item.originalImageData, options);
-    item.currentImageData = addOutlineImageData(item.currentImageData, options);
-  };
-  transform.kind = "outline";
-  transform.value = options;
-  transformItems(transform, message);
+  createResultsFromRecords(
+    records,
+    (imageData, sourceRecord) => addOutlineImageData(
+      sourceRecord.target === confirmedTarget ? confirmedBase : imageData,
+      options
+    ),
+    "outline",
+    message,
+    { fullResolutionValue: options }
+  );
 }
 
 function iconifyResize() {
