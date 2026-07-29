@@ -61,6 +61,7 @@ const feedbackMessageCount = document.querySelector("#feedbackMessageCount");
 const feedbackContact = document.querySelector("#feedbackContact");
 const feedbackHoney = document.querySelector("#feedbackHoney");
 const feedbackSubmitStatus = document.querySelector("#feedbackSubmitStatus");
+const feedbackFallbackBtn = document.querySelector("#feedbackFallbackBtn");
 const submitFeedbackBtn = document.querySelector("#submitFeedbackBtn");
 const openDonationDialogBtn = document.querySelector("#openDonationDialogBtn");
 const donationDialog = document.querySelector("#donationDialog");
@@ -1047,11 +1048,67 @@ function rememberFeedbackSubmission() {
   }
 }
 
+function feedbackPayload() {
+  const category = String(feedbackCategory?.value || "其他").trim();
+  const message = String(feedbackMessage?.value || "").trim();
+  const contact = String(feedbackContact?.value || "").trim();
+  return {
+    message,
+    fields: {
+      _subject: `图片处理工具｜${category}`,
+      _template: "table",
+      _captcha: "false",
+      "反馈类型": category,
+      "留言内容": message,
+      "联系方式": contact || "未填写",
+      "来源页面": window.location.href,
+      "提交时间": new Date().toLocaleString("zh-CN")
+    }
+  };
+}
+
+function feedbackFailureMessage(error) {
+  if (error?.name === "AbortError") {
+    return "提交超时。你可以稍后重试，或使用下方备用入口。";
+  }
+  const detail = String(error?.message || "");
+  if (/needs activation|activate form|activation/i.test(detail)) {
+    return "留言通道尚未激活。作者需要先在邮箱中点击“Activate Form”，激活后即可提交。";
+  }
+  if (/web server|browsed as html files/i.test(detail)) {
+    return "邮件服务没有识别当前网页来源。请刷新网页后重试，或使用下方备用入口。";
+  }
+  return "自动提交没有成功。你可以稍后重试，或使用下方备用入口。";
+}
+
+function submitFeedbackInNewPage() {
+  const { message, fields } = feedbackPayload();
+  if (message.length < 10) {
+    feedbackSubmitStatus.textContent = "请至少填写 10 个字，方便作者理解你的反馈。";
+    feedbackMessage?.focus();
+    return;
+  }
+  const fallbackForm = document.createElement("form");
+  fallbackForm.action = "https://formsubmit.co/84618558@qq.com";
+  fallbackForm.method = "POST";
+  fallbackForm.target = "_blank";
+  fallbackForm.hidden = true;
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    fallbackForm.append(input);
+  }
+  document.body.append(fallbackForm);
+  fallbackForm.submit();
+  fallbackForm.remove();
+  feedbackSubmitStatus.textContent = "已打开备用提交页面，请按页面提示完成提交。";
+}
+
 async function submitFeedback(event) {
   event.preventDefault();
-  const message = String(feedbackMessage?.value || "").trim();
-  const category = String(feedbackCategory?.value || "其他").trim();
-  const contact = String(feedbackContact?.value || "").trim();
+  const { message, fields } = feedbackPayload();
   const honey = String(feedbackHoney?.value || "").trim();
   if (honey) {
     closeFeedbackDialog();
@@ -1071,6 +1128,7 @@ async function submitFeedback(event) {
   submitFeedbackBtn.disabled = true;
   submitFeedbackBtn.textContent = "正在提交…";
   feedbackSubmitStatus.textContent = "正在安全转发留言，请稍候…";
+  if (feedbackFallbackBtn) feedbackFallbackBtn.hidden = true;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
@@ -1080,16 +1138,7 @@ async function submitFeedback(event) {
         "Content-Type": "application/json",
         Accept: "application/json"
       },
-      body: JSON.stringify({
-        _subject: `图片处理工具｜${category}`,
-        _template: "table",
-        _captcha: "false",
-        "反馈类型": category,
-        "留言内容": message,
-        "联系方式": contact || "未填写",
-        "来源页面": window.location.href,
-        "提交时间": new Date().toLocaleString("zh-CN")
-      }),
+      body: JSON.stringify(fields),
       signal: controller.signal
     });
     const result = await response.json().catch(() => ({}));
@@ -1103,8 +1152,8 @@ async function submitFeedback(event) {
     setStatus("反馈已提交，将直接发送到作者邮箱。");
     window.setTimeout(closeFeedbackDialog, 1400);
   } catch (error) {
-    const failure = error?.name === "AbortError" ? "提交超时" : "暂时无法连接留言服务";
-    feedbackSubmitStatus.textContent = `${failure}，请稍后再试。`;
+    feedbackSubmitStatus.textContent = feedbackFailureMessage(error);
+    if (feedbackFallbackBtn) feedbackFallbackBtn.hidden = false;
   } finally {
     window.clearTimeout(timeout);
     submitFeedbackBtn.disabled = false;
@@ -13852,11 +13901,13 @@ document.addEventListener("keydown", (event) => {
 
 openFeedbackDialogBtn?.addEventListener("click", () => {
   if (feedbackSubmitStatus) feedbackSubmitStatus.textContent = "";
+  if (feedbackFallbackBtn) feedbackFallbackBtn.hidden = true;
   setCommunityDialogOpen(feedbackDialog, true);
 });
 closeFeedbackDialogBtn?.addEventListener("click", closeFeedbackDialog);
 cancelFeedbackBtn?.addEventListener("click", closeFeedbackDialog);
 feedbackForm?.addEventListener("submit", submitFeedback);
+feedbackFallbackBtn?.addEventListener("click", submitFeedbackInNewPage);
 feedbackMessage?.addEventListener("input", () => {
   if (feedbackMessageCount) feedbackMessageCount.textContent = String(feedbackMessage.value.length);
 });

@@ -343,6 +343,18 @@ h3 {
   font-size: 12px;
 }
 
+.feedback-fallback {
+  justify-self: end;
+  min-height: 36px;
+  color: var(--ds-accent-soft);
+  border-color: color-mix(in srgb, var(--ds-accent) 50%, var(--ds-border));
+  background: color-mix(in srgb, var(--ds-accent) 10%, var(--ds-panel));
+}
+
+.feedback-fallback[hidden] {
+  display: none;
+}
+
 .community-dialog-actions {
   display: flex;
   justify-content: flex-end;
