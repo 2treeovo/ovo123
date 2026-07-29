@@ -13,7 +13,7 @@
 <meta content="summary_large_image" name="twitter:card"/>
 <link href="styles.css?v=professional-core-35" rel="stylesheet"/>
 <link href="visual-refresh.css?v=studio-refresh-05" rel="stylesheet"/>
-<link href="design-system.css?v=professional-ui-01" rel="stylesheet"/></head>
+<link href="design-system.css?v=professional-ui-02" rel="stylesheet"/></head>
 <body>
 <main class="app">
 <header aria-label="全局工具栏" class="app-topbar">
@@ -24,7 +24,8 @@
 <small>抠图 · 绘制 · 编辑 · 序列帧</small>
 </div>
 <section aria-label="处理对象" class="processing-target-bar"><strong>处理对象</strong><button class="active" data-processing-source="original" type="button">原始图片库</button><button data-processing-source="result" type="button">处理结果库</button><button data-processing-source="sequence" type="button">当前序列帧</button></section><div class="topbar-actions">
-<output aria-live="polite" class="memory-usage-indicator" data-level="normal" id="memoryUsageIndicator">内存 0 MB</output>
+<button class="topbar-utility" id="openFeedbackDialogBtn" type="button"><span aria-hidden="true">✦</span>反馈与建议</button>
+<button class="topbar-utility support" id="openDonationDialogBtn" type="button"><span aria-hidden="true">♥</span>支持作者</button>
 <button class="primary" id="openImportDialogBtn" type="button">导入</button>
 <button id="openExportDialogBtn" type="button">导出</button>
 </div>
@@ -422,4 +423,26 @@
 </section>
 </div><div aria-busy="true" aria-live="assertive" class="operation-busy" hidden="" id="operationBusyOverlay">
 <div class="operation-busy-card"><span aria-hidden="true" class="busy-spinner"></span><strong id="operationBusyText">正在处理…</strong></div>
-</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-36" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>
+</div><div class="app-modal community-modal" hidden="" id="feedbackDialog">
+<section aria-labelledby="feedbackDialogTitle" class="app-dialog community-dialog-panel">
+<div class="community-dialog-head"><div><span class="dialog-kicker">FEEDBACK</span><h2 id="feedbackDialogTitle">反馈与建议</h2><p>你的留言不会公开展示，将通过邮件服务直接转发给作者。</p></div><button aria-label="关闭反馈窗口" class="dialog-close" id="closeFeedbackDialogBtn" type="button">关闭</button></div>
+<form id="feedbackForm">
+<label><span>反馈类型</span><select id="feedbackCategory" name="反馈类型"><option>功能建议</option><option>问题反馈</option><option>使用体验</option><option>其他</option></select></label>
+<label><span>留言内容</span><textarea id="feedbackMessage" maxlength="2000" minlength="10" name="留言内容" placeholder="请描述你的建议、遇到的问题或希望增加的功能…" required="" rows="7"></textarea><small><output id="feedbackMessageCount">0</output> / 2000</small></label>
+<label><span>联系方式 <em>选填</em></span><input id="feedbackContact" maxlength="120" name="联系方式" placeholder="邮箱、QQ 或其他联系方式"/></label>
+<input aria-hidden="true" autocomplete="off" class="feedback-honey" id="feedbackHoney" name="_honey" tabindex="-1"/>
+<p aria-live="polite" class="feedback-submit-status" id="feedbackSubmitStatus"></p>
+<div class="community-dialog-actions"><button id="cancelFeedbackBtn" type="button">取消</button><button class="primary" id="submitFeedbackBtn" type="submit">提交留言</button></div>
+</form>
+</section>
+</div><div class="app-modal community-modal" hidden="" id="donationDialog">
+<section aria-labelledby="donationDialogTitle" class="app-dialog community-dialog-panel donation-dialog-panel">
+<div class="community-dialog-head"><div><span class="dialog-kicker">SUPPORT</span><h2 id="donationDialogTitle">支持作者</h2><p>如果这个工具帮到了你，可以自愿请作者喝杯咖啡。</p></div><button aria-label="关闭支持作者窗口" class="dialog-close" id="closeDonationDialogBtn" type="button">关闭</button></div>
+<div class="donation-card"><span class="donation-method">微信赞赏</span><img alt="微信赞赏二维码" id="wechatDonationQr" src="assets/wechat-donation.jpg"/><strong>微信扫一扫</strong><small>捐赠完全自愿，不影响任何功能使用。</small></div>
+<div class="community-dialog-actions"><button id="closeDonationActionBtn" type="button">完成</button></div>
+</section>
+</div><div class="app-modal community-modal" hidden="" id="memoryLimitDialog">
+<section aria-labelledby="memoryLimitDialogTitle" class="app-dialog memory-limit-panel">
+<div class="memory-limit-icon" aria-hidden="true">!</div><div><h2 id="memoryLimitDialogTitle">工作区内存已满</h2><p id="memoryLimitMessage">请先清理未使用的处理结果或序列帧，再继续导入或处理图片。</p></div><button class="primary" id="closeMemoryLimitDialogBtn" type="button">我知道了</button>
+</section>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-37" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>

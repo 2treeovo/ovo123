@@ -50,7 +50,25 @@ const forceRemoveColor = document.querySelector("#forceRemoveColor");
 const swatches = document.querySelector("#swatches");
 const pickedColorsPanel = document.querySelector("#pickedColorsPanel");
 const statusText = document.querySelector("#status");
-const memoryUsageIndicator = document.querySelector("#memoryUsageIndicator");
+const openFeedbackDialogBtn = document.querySelector("#openFeedbackDialogBtn");
+const feedbackDialog = document.querySelector("#feedbackDialog");
+const closeFeedbackDialogBtn = document.querySelector("#closeFeedbackDialogBtn");
+const cancelFeedbackBtn = document.querySelector("#cancelFeedbackBtn");
+const feedbackForm = document.querySelector("#feedbackForm");
+const feedbackCategory = document.querySelector("#feedbackCategory");
+const feedbackMessage = document.querySelector("#feedbackMessage");
+const feedbackMessageCount = document.querySelector("#feedbackMessageCount");
+const feedbackContact = document.querySelector("#feedbackContact");
+const feedbackHoney = document.querySelector("#feedbackHoney");
+const feedbackSubmitStatus = document.querySelector("#feedbackSubmitStatus");
+const submitFeedbackBtn = document.querySelector("#submitFeedbackBtn");
+const openDonationDialogBtn = document.querySelector("#openDonationDialogBtn");
+const donationDialog = document.querySelector("#donationDialog");
+const closeDonationDialogBtn = document.querySelector("#closeDonationDialogBtn");
+const closeDonationActionBtn = document.querySelector("#closeDonationActionBtn");
+const memoryLimitDialog = document.querySelector("#memoryLimitDialog");
+const memoryLimitMessage = document.querySelector("#memoryLimitMessage");
+const closeMemoryLimitDialogBtn = document.querySelector("#closeMemoryLimitDialogBtn");
 const removeBtn = document.querySelector("#removeBtn");
 const cutoutCommitRow = removeBtn?.closest(".cutout-commit-row");
 const undoBtn = document.querySelector("#undoBtn");
@@ -928,6 +946,9 @@ const exportSettingsStoreName = "settings";
 const maxHistoryStates = 12;
 const maxRedoStates = 12;
 const workspaceMemoryPolicy = memoryPolicy(navigator.deviceMemory || 4);
+const feedbackEndpoint = "https://formsubmit.co/ajax/84618558@qq.com";
+const feedbackCooldownMs = 60 * 1000;
+let memoryLimitAcknowledged = false;
 
 function pushBoundedState(stack, state, limit) {
   stack.push(state);
@@ -952,16 +973,15 @@ function workspaceMemoryReport() {
 }
 
 function updateMemoryIndicator() {
-  if (!memoryUsageIndicator) return;
   const report = workspaceMemoryReport();
   const level = memoryPressureLevel(report.totalBytes, workspaceMemoryPolicy);
-  memoryUsageIndicator.dataset.level = level;
-  memoryUsageIndicator.textContent = `内存 ${formatBytes(report.totalBytes)} / ${formatBytes(workspaceMemoryPolicy.softLimitBytes)}`;
-  memoryUsageIndicator.title = [
-    `像素缓冲：${formatBytes(report.pixelBytes)}`,
-    `原始压缩源：${formatBytes(report.encodedBytes)}`,
-    "导入图片使用代理预览；原始压缩文件保留到导出时按需解码。"
-  ].join("\n");
+  if (level === "normal") memoryLimitAcknowledged = false;
+  if (level !== "critical" || memoryLimitAcknowledged || !memoryLimitDialog) return;
+  if (memoryLimitMessage) {
+    memoryLimitMessage.textContent = `当前工作区约占用 ${formatBytes(report.totalBytes)}。请先清理未使用的处理结果、原图或序列帧，再继续导入或处理图片。`;
+  }
+  memoryLimitDialog.hidden = false;
+  syncModalOpenClass();
 }
 
 function compactHistoryForMemory() {
@@ -984,6 +1004,112 @@ function syncModalOpenClass() {
     ".app-modal:not([hidden]), .image-preview-modal:not([hidden]), .frame-picker:not([hidden])"
   ));
   document.body.classList.toggle("modal-open", hasOpenModal);
+}
+
+function setCommunityDialogOpen(dialog, open) {
+  if (!dialog) return;
+  dialog.hidden = !open;
+  syncModalOpenClass();
+  if (open) {
+    window.setTimeout(() => {
+      dialog.querySelector("textarea, input:not([type='hidden']), select, button")?.focus();
+    }, 0);
+  }
+}
+
+function closeFeedbackDialog() {
+  setCommunityDialogOpen(feedbackDialog, false);
+}
+
+function closeDonationDialog() {
+  setCommunityDialogOpen(donationDialog, false);
+}
+
+function closeMemoryLimitDialog() {
+  memoryLimitAcknowledged = true;
+  setCommunityDialogOpen(memoryLimitDialog, false);
+}
+
+function feedbackCooldownRemaining() {
+  try {
+    const lastSubmitted = Number(localStorage.getItem("imageStudioLastFeedbackAt")) || 0;
+    return Math.max(0, feedbackCooldownMs - (Date.now() - lastSubmitted));
+  } catch {
+    return 0;
+  }
+}
+
+function rememberFeedbackSubmission() {
+  try {
+    localStorage.setItem("imageStudioLastFeedbackAt", String(Date.now()));
+  } catch {
+    // Private browsing can reject localStorage; the successful submission still counts.
+  }
+}
+
+async function submitFeedback(event) {
+  event.preventDefault();
+  const message = String(feedbackMessage?.value || "").trim();
+  const category = String(feedbackCategory?.value || "其他").trim();
+  const contact = String(feedbackContact?.value || "").trim();
+  const honey = String(feedbackHoney?.value || "").trim();
+  if (honey) {
+    closeFeedbackDialog();
+    return;
+  }
+  if (message.length < 10) {
+    feedbackSubmitStatus.textContent = "请至少填写 10 个字，方便作者理解你的反馈。";
+    feedbackMessage?.focus();
+    return;
+  }
+  const cooldown = feedbackCooldownRemaining();
+  if (cooldown > 0) {
+    feedbackSubmitStatus.textContent = `请稍等 ${Math.ceil(cooldown / 1000)} 秒后再提交。`;
+    return;
+  }
+
+  submitFeedbackBtn.disabled = true;
+  submitFeedbackBtn.textContent = "正在提交…";
+  feedbackSubmitStatus.textContent = "正在安全转发留言，请稍候…";
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(feedbackEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify({
+        _subject: `图片处理工具｜${category}`,
+        _template: "table",
+        _captcha: "false",
+        "反馈类型": category,
+        "留言内容": message,
+        "联系方式": contact || "未填写",
+        "来源页面": window.location.href,
+        "提交时间": new Date().toLocaleString("zh-CN")
+      }),
+      signal: controller.signal
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.success === false || result.success === "false") {
+      throw new Error(result.message || "feedback service unavailable");
+    }
+    rememberFeedbackSubmission();
+    feedbackForm.reset();
+    if (feedbackMessageCount) feedbackMessageCount.textContent = "0";
+    feedbackSubmitStatus.textContent = "留言已提交。感谢你的反馈！";
+    setStatus("反馈已提交，将直接发送到作者邮箱。");
+    window.setTimeout(closeFeedbackDialog, 1400);
+  } catch (error) {
+    const failure = error?.name === "AbortError" ? "提交超时" : "暂时无法连接留言服务";
+    feedbackSubmitStatus.textContent = `${failure}，请稍后再试。`;
+  } finally {
+    window.clearTimeout(timeout);
+    submitFeedbackBtn.disabled = false;
+    submitFeedbackBtn.textContent = "提交留言";
+  }
 }
 
 function showExportSuccessToast(message) {
@@ -13724,6 +13850,34 @@ document.addEventListener("keydown", (event) => {
   }
 }, true);
 
+openFeedbackDialogBtn?.addEventListener("click", () => {
+  if (feedbackSubmitStatus) feedbackSubmitStatus.textContent = "";
+  setCommunityDialogOpen(feedbackDialog, true);
+});
+closeFeedbackDialogBtn?.addEventListener("click", closeFeedbackDialog);
+cancelFeedbackBtn?.addEventListener("click", closeFeedbackDialog);
+feedbackForm?.addEventListener("submit", submitFeedback);
+feedbackMessage?.addEventListener("input", () => {
+  if (feedbackMessageCount) feedbackMessageCount.textContent = String(feedbackMessage.value.length);
+});
+openDonationDialogBtn?.addEventListener("click", () => setCommunityDialogOpen(donationDialog, true));
+closeDonationDialogBtn?.addEventListener("click", closeDonationDialog);
+closeDonationActionBtn?.addEventListener("click", closeDonationDialog);
+closeMemoryLimitDialogBtn?.addEventListener("click", closeMemoryLimitDialog);
+for (const dialog of [feedbackDialog, donationDialog, memoryLimitDialog]) {
+  dialog?.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    if (dialog === memoryLimitDialog) closeMemoryLimitDialog();
+    else if (dialog === feedbackDialog) closeFeedbackDialog();
+    else closeDonationDialog();
+  });
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (feedbackDialog && !feedbackDialog.hidden) closeFeedbackDialog();
+  else if (donationDialog && !donationDialog.hidden) closeDonationDialog();
+  else if (memoryLimitDialog && !memoryLimitDialog.hidden) closeMemoryLimitDialog();
+});
 
 
 
