@@ -141,6 +141,8 @@ const fpsInput = document.querySelector("#fpsInput");
 const frameDelayInput = document.querySelector("#frameDelayInput");
 const sequenceCanvasBar = document.querySelector("#sequenceCanvasBar");
 const sequenceFramePosition = document.querySelector("#sequenceFramePosition");
+const sequenceProgressInput = document.querySelector("#sequenceProgressInput");
+const sequencePlayerFrames = document.querySelector("#sequencePlayerFrames");
 const previousSequenceFrameBtn = document.querySelector("#previousSequenceFrameBtn");
 const nextSequenceFrameBtn = document.querySelector("#nextSequenceFrameBtn");
 const copyCurrentFrameBtn = document.querySelector("#copyCurrentFrameBtn");
@@ -865,6 +867,7 @@ let canvasBackgroundMode = "checker";
 let didCropDrag = false;
 let playbackTimer = null;
 let playbackIndex = 0;
+let playbackPreviewFrameIndex = -1;
 let previewJobToken = 0;
 let previewJobBusy = false;
 let pendingLivePreview = false;
@@ -2481,6 +2484,65 @@ function updateRangeLabels() {
   if (shadowSizeValue && shadowSize) shadowSizeValue.value = `${shadowSize.value}%`;
 }
 
+function syncSequencePlayerProgress(index = activeFrameIndex) {
+  const safeIndex = sequenceFrames.length
+    ? Math.max(0, Math.min(sequenceFrames.length - 1, Number(index) || 0))
+    : 0;
+  if (sequenceFramePosition) {
+    sequenceFramePosition.value = sequenceFrames.length ? `${safeIndex + 1} / ${sequenceFrames.length}` : "0 / 0";
+  }
+  if (sequenceProgressInput) {
+    sequenceProgressInput.max = String(Math.max(0, sequenceFrames.length - 1));
+    sequenceProgressInput.value = String(safeIndex);
+    sequenceProgressInput.disabled = sequenceFrames.length < 2;
+    const progress = sequenceFrames.length > 1 ? safeIndex / (sequenceFrames.length - 1) : 0;
+    sequenceProgressInput.style.setProperty("--sequence-progress", `${progress * 100}%`);
+  }
+  if (previousSequenceFrameBtn) previousSequenceFrameBtn.disabled = sequenceFrames.length === 0 || safeIndex <= 0;
+  if (nextSequenceFrameBtn) nextSequenceFrameBtn.disabled = sequenceFrames.length === 0 || safeIndex >= sequenceFrames.length - 1;
+  sequencePlayerFrames?.querySelectorAll(".sequence-player-frame").forEach((button) => {
+    const isActive = Number(button.dataset.sequencePlayerIndex) === safeIndex;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-current", isActive ? "true" : "false");
+  });
+}
+
+function renderSequencePlayerTimeline() {
+  if (!sequencePlayerFrames) return;
+  const fragment = document.createDocumentFragment();
+  sequenceFrames.forEach((frame, index) => {
+    const listItem = document.createElement("span");
+    listItem.className = "sequence-player-frame-item";
+    listItem.setAttribute("role", "listitem");
+
+    const button = document.createElement("button");
+    button.className = `sequence-player-frame${frame.selected ? " selected" : ""}`;
+    button.type = "button";
+    button.dataset.sequencePlayerIndex = String(index);
+    button.title = `查看第 ${index + 1} 帧：${frame.name}`;
+    button.setAttribute("aria-label", `第 ${index + 1} 帧：${frame.name}`);
+
+    const thumbnail = document.createElement("img");
+    thumbnail.alt = "";
+    thumbnail.draggable = false;
+    thumbnail.src = frame.thumbnail || makeThumbnail(frame.imageData);
+
+    const frameNumber = document.createElement("span");
+    frameNumber.className = "sequence-player-frame-number";
+    frameNumber.textContent = String(index + 1);
+
+    button.append(thumbnail, frameNumber);
+    button.addEventListener("click", () => {
+      stopPlayback();
+      showSequenceFrame(index, false);
+    });
+    listItem.appendChild(button);
+    fragment.appendChild(listItem);
+  });
+  sequencePlayerFrames.replaceChildren(fragment);
+  syncSequencePlayerProgress(activeFrameIndex);
+}
+
 function syncSequenceCanvasBar(hasFrames = sequenceFrames.length > 0) {
   if (!sequenceCanvasBar) return;
   const activeFrame = activeFrameIndex >= 0 ? sequenceFrames[activeFrameIndex] : null;
@@ -2488,13 +2550,16 @@ function syncSequenceCanvasBar(hasFrames = sequenceFrames.length > 0) {
   sequenceCanvasBar.hidden = !visible;
   if (!visible) return;
 
-  if (sequenceFramePosition) sequenceFramePosition.value = `${activeFrameIndex + 1} / ${sequenceFrames.length}`;
+  const displayedIndex = playbackTimer && playbackPreviewFrameIndex >= 0
+    ? playbackPreviewFrameIndex
+    : activeFrameIndex;
+  syncSequencePlayerProgress(displayedIndex);
   if (frameDelayInput) {
     frameDelayInput.disabled = !activeFrame;
     frameDelayInput.value = String(normalizedFrameDelayMs(activeFrame));
   }
-  if (previousSequenceFrameBtn) previousSequenceFrameBtn.disabled = activeFrameIndex <= 0;
-  if (nextSequenceFrameBtn) nextSequenceFrameBtn.disabled = activeFrameIndex >= sequenceFrames.length - 1;
+  if (previousSequenceFrameBtn) previousSequenceFrameBtn.disabled = displayedIndex <= 0;
+  if (nextSequenceFrameBtn) nextSequenceFrameBtn.disabled = displayedIndex >= sequenceFrames.length - 1;
   if (copyCurrentFrameBtn) copyCurrentFrameBtn.disabled = !activeFrame;
   if (openFramePickerFromBarBtn) openFramePickerFromBarBtn.disabled = !hasFrames;
 }
@@ -2575,7 +2640,11 @@ function setButtons() {
   if (exportAssetsZipBtn) exportAssetsZipBtn.disabled = selectedAssetCount === 0;
   clearAssetsBtn.disabled = !hasAssets;
   clearExportLocationBtn.disabled = !exportDirectoryHandle;
-  playFramesBtn.textContent = playbackTimer ? "暂停" : "播放";
+  const isPlayingSequence = Boolean(playbackTimer);
+  playFramesBtn.textContent = isPlayingSequence ? "⏸" : "▶";
+  playFramesBtn.title = isPlayingSequence ? "暂停" : "播放";
+  playFramesBtn.setAttribute("aria-label", isPlayingSequence ? "暂停序列帧" : "播放序列帧");
+  playFramesBtn.setAttribute("aria-pressed", String(isPlayingSequence));
   syncSequenceCanvasBar(hasFrames);
 }
 
@@ -2872,6 +2941,7 @@ function renderFrameList() {
     });
     frameList.appendChild(button);
   });
+  renderSequencePlayerTimeline();
 }
 
 function renderAssetList(scrollToLatest = false) {
@@ -11137,6 +11207,12 @@ function selectedSequenceFrames() {
     .sort((a, b) => (a.frame.order || 0) - (b.frame.order || 0));
 }
 
+function playableSequenceFrames() {
+  const selected = selectedSequenceFrames();
+  if (selected.length) return selected;
+  return sequenceFrames.map((frame, index) => ({ frame, index }));
+}
+
 function chosenSequenceFrames() {
   const selected = selectedSequenceFrames();
   if (selected.length) return selected;
@@ -11925,6 +12001,7 @@ function showSequenceFrame(index, openTab = true) {
   activeLibraryTarget = null;
   activeIndex = -1;
   activeFrameIndex = index;
+  playbackPreviewFrameIndex = index;
   currentImageData = frame.imageData;
   originalImageData = frame.imageData;
   liveBaseImageData = null;
@@ -11943,17 +12020,21 @@ function showSequenceFrame(index, openTab = true) {
 function previewPlaybackFrame(index) {
   const frame = sequenceFrames[index];
   if (!frame) return;
+  playbackPreviewFrameIndex = index;
   cropSelection = null;
   hideCropBox();
   renderPreviewImageData(frame.imageData);
+  syncSequencePlayerProgress(index);
 }
 
 function previewPlaybackSelectedFrame(selected, selectedIndex) {
   const item = selected[selectedIndex];
   if (!item) return;
+  playbackPreviewFrameIndex = item.index;
   cropSelection = null;
   hideCropBox();
   renderPreviewImageData(item.frame.imageData);
+  syncSequencePlayerProgress(item.index);
 }
 
 const maxFrameDelayMs = 10000;
@@ -11978,7 +12059,7 @@ function stopPlayback() {
 }
 
 function schedulePlaybackFrame() {
-  const currentSelected = selectedSequenceFrames();
+  const currentSelected = playableSequenceFrames();
   if (currentSelected.length === 0) {
     stopPlayback();
     return;
@@ -11992,27 +12073,31 @@ function schedulePlaybackFrame() {
 
 function togglePlayback() {
   if (playbackTimer) {
+    const pausedFrameIndex = playbackPreviewFrameIndex;
     stopPlayback();
+    if (pausedFrameIndex >= 0 && sequenceFrames[pausedFrameIndex]) {
+      showSequenceFrame(pausedFrameIndex, false);
+    }
     setStatus("已暂停序列帧播放。");
     return;
   }
   if (sequenceFrames.length === 0) return;
-  const selected = selectedSequenceFrames();
-  if (selected.length === 0) {
-    setStatus("请先选择要播放的序列帧。");
-    return;
-  }
+  const selected = playableSequenceFrames();
   const fps = Math.max(1, Math.min(60, Number(fpsInput.value) || 8));
   playbackIndex = Math.max(0, selected.findIndex((item) => item.index === activeFrameIndex));
+  playbackPreviewFrameIndex = activeFrameIndex;
   schedulePlaybackFrame();
   setButtons();
   const delayedCount = selected.filter((item) => normalizedFrameDelayMs(item.frame) > 0).length;
-  setStatus(`正在以 ${fps} FPS 播放 ${selected.length} 个选中序列帧${delayedCount ? `，其中 ${delayedCount} 帧使用单帧延迟` : ""}。`);
+  const selectedLabel = selectedSequenceFrames().length ? "个选中序列帧" : "个序列帧";
+  setStatus(`正在以 ${fps} FPS 播放 ${selected.length} ${selectedLabel}${delayedCount ? `，其中 ${delayedCount} 帧使用单帧延迟` : ""}。`);
 }
 
 function showAdjacentSequenceFrame(direction) {
   if (sequenceFrames.length === 0) return;
-  const current = activeFrameIndex >= 0 ? activeFrameIndex : 0;
+  const current = playbackTimer && playbackPreviewFrameIndex >= 0
+    ? playbackPreviewFrameIndex
+    : (activeFrameIndex >= 0 ? activeFrameIndex : 0);
   const next = Math.max(0, Math.min(sequenceFrames.length - 1, current + direction));
   if (next === current) return;
   stopPlayback();
@@ -13142,6 +13227,11 @@ alignFramesBtn.addEventListener("click", alignSequenceSubjects);
 playFramesBtn.addEventListener("click", togglePlayback);
 previousSequenceFrameBtn?.addEventListener("click", () => showAdjacentSequenceFrame(-1));
 nextSequenceFrameBtn?.addEventListener("click", () => showAdjacentSequenceFrame(1));
+sequenceProgressInput?.addEventListener("input", () => {
+  const index = Math.max(0, Math.min(sequenceFrames.length - 1, Number(sequenceProgressInput.value) || 0));
+  stopPlayback();
+  showSequenceFrame(index, false);
+});
 copyCurrentFrameBtn?.addEventListener("click", copyCurrentSequenceFrame);
 openFramePickerFromBarBtn?.addEventListener("click", openFramePicker);
 exportFramesBtn?.addEventListener("click", exportSequenceFrames);

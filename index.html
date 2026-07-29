@@ -12,7 +12,7 @@
 <meta content="https://2treeovo.github.io/ovo123/og.png" property="og:image"/>
 <meta content="summary_large_image" name="twitter:card"/>
 <link href="styles.css?v=single-frame-delay-31" rel="stylesheet"/>
-<link href="visual-refresh.css?v=studio-refresh-03" rel="stylesheet"/></head>
+<link href="visual-refresh.css?v=studio-refresh-04" rel="stylesheet"/></head>
 <body>
 <main class="app">
 <header aria-label="全局工具栏" class="app-topbar">
@@ -301,8 +301,13 @@
 <div class="empty-state" id="emptyState"></div>
 </div>
 <section aria-label="序列帧操作栏" class="sequence-canvas-bar" hidden="" id="sequenceCanvasBar">
-<div class="sequence-canvas-position"><span>序列帧</span><button aria-label="上一帧" id="previousSequenceFrameBtn" title="上一帧" type="button">‹</button><output id="sequenceFramePosition">0 / 0</output><button aria-label="下一帧" id="nextSequenceFrameBtn" title="下一帧" type="button">›</button></div>
-<div class="sequence-canvas-actions"><button id="copyCurrentFrameBtn" title="复制当前帧，并插入到序列帧库当前帧的后一帧" type="button">复制当前帧</button><label class="sequence-frame-delay-control" for="frameDelayInput" title="只延长当前帧的播放时间，0 表示按普通 FPS 播放"><span>当前帧额外停留</span><input aria-label="当前帧额外停留毫秒数" id="frameDelayInput" max="10000" min="0" step="50" type="number" value="0"/><b>ms</b></label><label class="sequence-fps-control" for="fpsInput"><span>播放 FPS</span><input aria-label="播放帧率" id="fpsInput" max="60" min="1" type="number" value="8"/></label><button disabled="" id="playFramesBtn" type="button">播放</button><button id="openFramePickerFromBarBtn" type="button">选帧</button></div>
+<div class="sequence-player-controls">
+<div aria-label="序列帧播放控制" class="sequence-player-transport" role="group"><button aria-label="上一帧" class="sequence-player-icon" id="previousSequenceFrameBtn" title="上一帧" type="button">⏮</button><button aria-label="播放序列帧" aria-pressed="false" class="sequence-player-icon sequence-player-play" disabled="" id="playFramesBtn" title="播放" type="button">▶</button><button aria-label="下一帧" class="sequence-player-icon" id="nextSequenceFrameBtn" title="下一帧" type="button">⏭</button></div>
+<label class="sequence-player-scrubber" for="sequenceProgressInput"><span class="sr-only">播放进度</span><input aria-label="序列帧播放进度" id="sequenceProgressInput" max="0" min="0" step="1" type="range" value="0"/></label>
+<output aria-live="polite" class="sequence-player-position" id="sequenceFramePosition">0 / 0</output>
+<div class="sequence-player-settings"><label class="sequence-fps-control" for="fpsInput" title="播放帧率"><span>FPS</span><input aria-label="播放帧率" id="fpsInput" max="60" min="1" type="number" value="8"/></label><label class="sequence-frame-delay-control" for="frameDelayInput" title="只延长当前帧的播放时间，0 表示按普通 FPS 播放"><span>停留</span><input aria-label="当前帧额外停留毫秒数" id="frameDelayInput" max="10000" min="0" step="50" type="number" value="0"/><b>ms</b></label><button id="copyCurrentFrameBtn" title="复制当前帧，并插入到当前帧之后" type="button">复制帧</button></div>
+</div>
+<div aria-label="序列帧时间轴" class="sequence-player-timeline"><div class="sequence-player-frames" id="sequencePlayerFrames" role="list"></div><button aria-label="选择或添加序列帧" class="sequence-player-add" id="openFramePickerFromBarBtn" title="选择或添加序列帧" type="button">＋</button></div>
 </section>
 </section>
 </main>
@@ -415,4 +420,4 @@
 </section>
 </div><div aria-busy="true" aria-live="assertive" class="operation-busy" hidden="" id="operationBusyOverlay">
 <div class="operation-busy-card"><span aria-hidden="true" class="busy-spinner"></span><strong id="operationBusyText">正在处理…</strong></div>
-</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=temporal-pixel-stability-33"></script><script src="ui-shell.js?v=single-frame-delay-31"></script></body></html>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=sequence-player-34"></script><script src="ui-shell.js?v=single-frame-delay-31"></script></body></html>
