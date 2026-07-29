@@ -144,7 +144,7 @@
 <button disabled="" id="flipHorizontalBtn" type="button">水平镜像</button>
 <button disabled="" id="flipVerticalBtn" type="button">垂直镜像</button>
 <button disabled="" id="addShadowBtn" type="button">添加底部阴影</button>
-<button disabled="" id="addOutlineBtn" type="button">添加描边</button>
+<button aria-pressed="false" disabled="" id="addOutlineBtn" type="button">添加描边</button>
 </div>
 </div>
 <div class="shadow-tools">
@@ -162,9 +162,10 @@
 </div>
 <div class="control-line">
 <label for="outlineStrength">描边强度</label>
-<output id="outlineStrengthValue">4</output>
+<output id="outlineStrengthValue">1</output>
 </div>
-<input id="outlineStrength" max="32" min="1" type="range" value="4"/>
+<input id="outlineStrength" max="32" min="1" type="range" value="1"/>
+<p class="tool-hint">点击“添加描边”进入预览，调整完成后点击“确认描边”应用。</p>
 </div>
 <div class="iconify-tools">
 <div class="outline-row">
@@ -446,4 +447,4 @@
 <section aria-labelledby="memoryLimitDialogTitle" class="app-dialog memory-limit-panel">
 <div class="memory-limit-icon" aria-hidden="true">!</div><div><h2 id="memoryLimitDialogTitle">工作区内存已满</h2><p id="memoryLimitMessage">请先清理未使用的处理结果或序列帧，再继续导入或处理图片。</p></div><button class="primary" id="closeMemoryLimitDialogBtn" type="button">我知道了</button>
 </section>
-</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-39" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-40" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>

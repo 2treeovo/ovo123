@@ -918,6 +918,7 @@ let outlinePreviewProxyImageData = null;
 let outlinePreviewTarget = null;
 let outlinePreviewTimer = null;
 let outlinePreviewUsingProxy = false;
+let outlinePreviewActive = false;
 let outlineTransparencyCache = new WeakMap();
 let liveDistanceCacheBySource = new WeakMap();
 let livePreviewProxySource = null;
@@ -2749,6 +2750,7 @@ function pushHistory() {
 }
 
 function renderRestoredState() {
+  clearOutlinePreviewState({ restore: false });
   cropSelection = null;
   hideCropBox();
   clearLassoSelection();
@@ -3440,6 +3442,9 @@ function removeWorkspaceTabsForTargets(targets) {
 }
 
 function activateWorkspaceTab(tab) {
+  if (outlinePreviewActive && outlinePreviewTarget && outlinePreviewTarget !== tab.target) {
+    clearOutlinePreviewState({ restore: true });
+  }
   activeWorkspaceTabId = tab.id;
   activeLibraryTarget = null;
   if (tab.type === "image") {
@@ -4937,6 +4942,7 @@ function selectImage(index, openTab = true) {
 }
 
 function clearImageWorkspace() {
+  clearOutlinePreviewState({ restore: false });
   activeIndex = -1;
   originalImageData = null;
   currentImageData = null;
@@ -7658,6 +7664,9 @@ function processingSourceLabel(source = processingSource) {
 
 function setProcessingSource(source, options = {}) {
   if (!["original", "result", "sequence"].includes(source)) return;
+  if (outlinePreviewActive && source !== processingSource) {
+    clearOutlinePreviewState({ restore: true });
+  }
   processingSource = source;
   markActiveLibrary(source, {
     scroll: options.scrollLibrary !== false,
@@ -8676,10 +8685,20 @@ function renderOutlineProxyPreview(imageData) {
   updateSelectionCanvas();
 }
 
+function setOutlineEditingUi(active) {
+  outlinePreviewActive = Boolean(active);
+  if (!addOutlineBtn) return;
+  addOutlineBtn.textContent = outlinePreviewActive ? "确认描边" : "添加描边";
+  addOutlineBtn.classList.toggle("primary", outlinePreviewActive);
+  addOutlineBtn.setAttribute("aria-pressed", String(outlinePreviewActive));
+}
+
 function clearOutlinePreviewState(options = {}) {
   window.clearTimeout(outlinePreviewTimer);
   outlinePreviewTimer = null;
-  if ((options.restore || outlinePreviewUsingProxy) && outlinePreviewBaseImageData) {
+  const currentRecord = currentOutlinePreviewRecord();
+  const canRestore = !outlinePreviewTarget || currentRecord?.target === outlinePreviewTarget;
+  if (options.restore && canRestore && outlinePreviewBaseImageData) {
     currentImageData = outlinePreviewBaseImageData;
     renderCanvas();
   }
@@ -8687,13 +8706,23 @@ function clearOutlinePreviewState(options = {}) {
   outlinePreviewProxyImageData = null;
   outlinePreviewTarget = null;
   outlinePreviewUsingProxy = false;
+  setOutlineEditingUi(false);
 }
 
 function previewOutline(options = {}) {
+  if (!outlinePreviewActive) return;
   const record = currentOutlinePreviewRecord();
-  if (!record) return;
+  if (!record || (outlinePreviewTarget && outlinePreviewTarget !== record.target)) {
+    clearOutlinePreviewState({ restore: false });
+    setStatus("描边预览已取消：当前处理目标已经切换。");
+    return;
+  }
   const transparencySource = record.previewImageData || record.imageData;
-  if (!hasTransparentPixels(transparencySource)) return;
+  if (!hasTransparentPixels(transparencySource)) {
+    clearOutlinePreviewState({ restore: true });
+    setStatus("当前目标没有透明区域，请先抠图或净化透明背景后再添加描边。");
+    return;
+  }
   if (outlinePreviewTarget !== record.target) {
     outlinePreviewTarget = record.target;
     // Preview is read-only, so references are sufficient. Cloning a megapixel source
@@ -8701,7 +8730,7 @@ function previewOutline(options = {}) {
     outlinePreviewBaseImageData = record.imageData;
     outlinePreviewProxyImageData = record.previewImageData || null;
   }
-  const size = Number(outlineStrength?.value) || 4;
+  const size = Number(outlineStrength?.value) || 1;
   const color = outlineColor?.value || "#333333";
   const useFastProxy = options.fast === true
     && outlinePreviewBaseImageData.width * outlinePreviewBaseImageData.height > outlinePreviewFastPixelLimit;
@@ -8726,30 +8755,57 @@ function previewOutline(options = {}) {
     currentImageData = next;
     renderCanvas();
   }
-  setStatus(`描边实时预览：${size}px。点击“添加描边”后保存结果。`);
+  setStatus(`描边实时预览：${size}px。调整完成后点击“确认描边”应用。`);
 }
 
 function scheduleOutlinePreview(options = {}) {
   updateRangeLabels();
+  if (!outlinePreviewActive) return;
   const fast = options.fast === true;
   window.clearTimeout(outlinePreviewTimer);
   outlinePreviewTimer = window.setTimeout(() => previewOutline({ fast }), fast ? 0 : 12);
 }
 
+function beginOutlineEditing() {
+  const record = currentOutlinePreviewRecord();
+  if (!record) return;
+  const transparencySource = record.previewImageData || record.imageData;
+  if (!hasTransparentPixels(transparencySource)) {
+    setStatus("当前目标没有透明区域，请先抠图或净化透明背景后再添加描边。");
+    return;
+  }
+  outlinePreviewTarget = record.target;
+  outlinePreviewBaseImageData = record.imageData;
+  outlinePreviewProxyImageData = record.previewImageData || null;
+  setOutlineEditingUi(true);
+  previewOutline({ fast: true });
+}
+
 function addOutline() {
+  if (!outlinePreviewActive) {
+    beginOutlineEditing();
+    return;
+  }
   window.clearTimeout(outlinePreviewTimer);
+  const record = currentOutlinePreviewRecord();
+  if (!record || record.target !== outlinePreviewTarget) {
+    clearOutlinePreviewState({ restore: false });
+    setStatus("描边预览已取消：当前处理目标已经切换。");
+    return;
+  }
   const options = {
     color: outlineColor?.value || "#333333",
-    size: Number(outlineStrength?.value) || 4
+    size: Number(outlineStrength?.value) || 1
   };
   const message = `已添加 ${options.size}px 描边`;
   const frames = targetFrames();
   if (frames.length > 0 && !frames.some((frame) => hasTransparentPixels(frame.imageData))) {
+    clearOutlinePreviewState({ restore: true });
     setStatus("当前目标没有透明区域，请先抠图或净化透明背景后再添加描边。");
     return;
   }
+  clearOutlinePreviewState({ restore: true });
   if (transformFrames("outline", options, message)) {
-    clearOutlinePreviewState();
     return;
   }
   const targets = targetItems();
@@ -8765,7 +8821,6 @@ function addOutline() {
   transform.kind = "outline";
   transform.value = options;
   transformItems(transform, message);
-  clearOutlinePreviewState();
 }
 
 function iconifyResize() {
