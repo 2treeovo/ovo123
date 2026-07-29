@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>图片处理与序列帧工具</title>
+<link href="styles.css?v=single-frame-delay-31" rel="stylesheet"/></head>
+<body>
+<main class="app">
+<header aria-label="全局工具栏" class="app-topbar">
+<button class="sidebar-top-toggle" id="sidebarTopToggleBtn" type="button">收起侧栏</button>
+<div class="app-topbar-brand">
+<strong>图片处理工具</strong>
+<small>原图、处理结果与序列帧分开管理</small>
+</div>
+<section aria-label="处理对象" class="processing-target-bar"><strong>处理对象</strong><button class="active" data-processing-source="original" type="button">原始图片库</button><button data-processing-source="result" type="button">处理结果库</button><button data-processing-source="sequence" type="button">当前序列帧</button></section><div class="topbar-actions">
+<button class="primary" id="openImportDialogBtn" type="button">导入</button>
+<button id="openExportDialogBtn" type="button">导出</button>
+</div>
+</header>
+<aside class="panel">
+<div class="brand">
+<span aria-hidden="true" class="brand-mark"></span>
+<div>
+<h1>图片处理工具</h1>
+<p>原图只读保存，处理结果与序列帧独立管理。</p>
+</div>
+</div>
+<section aria-label="视频转帧" class="video-panel sequence-source-card">
+<div class="label-row">
+<span>视频转帧</span>
+<small id="loadedVideoNameOutput">尚未导入视频</small></div>
+<div class="playback-row">
+<input aria-label="视频抽帧帧率" autocomplete="off" id="videoFpsInput" max="30" min="1" title="每秒抽取帧数，默认 8" type="number" value="8"/>
+<button disabled="" id="extractVideoBtn" type="button">视频转序列帧</button>
+</div>
+<button disabled="" id="clearVideoBtn" type="button">清除视频</button>
+</section>
+<section aria-label="图集拆帧" class="spritesheet-panel sequence-source-card">
+<div class="label-row">
+<span>图集拆帧</span>
+<small>使用当前原图或处理结果</small></div>
+<div class="sheet-inputs">
+<input aria-label="sheet columns" id="sheetCols" min="1" placeholder="cols" type="number" value="4"/>
+<input aria-label="sheet rows" id="sheetRows" min="1" placeholder="rows" type="number" value="4"/>
+<button disabled="" id="extractSheetBtn" type="button">拆为序列帧</button>
+<button disabled="" id="autoExtractSubjectsBtn" type="button">自动提取主体</button>
+<label class="toggle compact-toggle transparent-source-toggle uniform-toggle">
+<input id="transparentAutoExtract" type="checkbox"/>
+<span>透明背景</span>
+</label>
+</div>
+</section>
+<section aria-label="处理结果库" class="asset-panel"><div class="label-row">
+<span>处理结果库</span>
+<output id="assetCount">0</output>
+</div><div class="library-actions"><button disabled="" id="selectAllAssetsBtn" type="button">全选结果</button><button disabled="" id="clearAssetSelectionBtn" type="button">取消选择</button><button disabled="" id="removeUnselectedAssetsBtn" type="button">移除非选定项</button><button disabled="" id="renameAssetBtn" type="button">重命名</button><button disabled="" id="addAssetsToSequenceBtn" type="button">加入序列帧</button><button disabled="" id="clearAssetsBtn" type="button">清空结果库</button></div><div aria-live="polite" class="frame-list" id="assetList"></div></section>
+<section aria-label="原始图片库" class="batch-panel">
+<div class="label-row">
+<span>原始图片库</span>
+<output id="batchCount">0</output>
+</div>
+<div class="library-actions">
+<button disabled="" id="selectAllBtn" type="button">全选原图</button>
+<button disabled="" id="clearSelectionBtn" type="button">取消选择</button>
+<button disabled="" id="renameImageBtn" type="button">重命名</button><button disabled="" id="addOriginalsToSequenceBtn" type="button">加入序列帧</button></div>
+<div aria-live="polite" class="image-list" id="imageList"></div>
+</section>
+<section aria-label="序列帧工作区" class="sequence-panel">
+<div class="label-row">
+<span>序列帧处理</span>
+</div>
+<div class="sequence-actions"><label class="button-like" for="sequenceImageInput">导入序列帧</label><input accept="image/*" hidden="" id="sequenceImageInput" multiple="" type="file"/>
+<button disabled="" id="findDuplicateFramesBtn" type="button">查找重复帧</button>
+<button disabled="" id="alignFramesBtn" type="button">主体居中对齐</button><button disabled="" id="normalizeFramesBtn" type="button">统一尺寸/底部对齐</button><button disabled="" id="saveFramesToResultsBtn" type="button">保存到结果库</button>
+<button disabled="" id="deleteBlockBtn" type="button">删除选区</button>
+<button disabled="" id="applyAllFrameEffectsBtn" type="button">应用当前效果</button>
+</div>
+</section><section aria-label="序列帧库" class="sequence-library-panel"><div class="label-row"><span>序列帧库</span><output id="frameCount">0</output></div><div class="library-actions"><button disabled="" id="selectAllFramesBtn" type="button">全选帧</button><button disabled="" id="clearFrameSelectionBtn" type="button">取消选帧</button><button disabled="" id="openFramePickerBtn" type="button">展开选帧</button><button disabled="" id="clearSequenceBtn" type="button">清空工作区</button></div><div aria-live="polite" class="frame-list" id="frameList"></div></section>
+<section aria-label="绘制功能" class="drawing-panel">
+<div class="label-row"><span>绘制功能</span><small>独立绘制工具</small></div>
+<div class="drawing-panel-tools">
+  <div class="drawing-canvas-create">
+    <div class="brush-palette-title"><strong>添加画布</strong><small>可新建纯白画布，也可用当前取色盘颜色新建画布</small></div>
+    <div class="drawing-canvas-size-row">
+      <label for="newCanvasWidth">宽</label>
+      <input aria-label="新建画布宽度" id="newCanvasWidth" max="4096" min="16" step="1" type="number" value="512"/>
+      <span>×</span>
+      <label for="newCanvasHeight">高</label>
+      <input aria-label="新建画布高度" id="newCanvasHeight" max="4096" min="16" step="1" type="number" value="512"/>
+    </div>
+    <div class="drawing-canvas-action-grid">
+      <button id="createBlankCanvasBtn" type="button">添加纯白画布</button>
+      <button id="createColorCanvasBtn" type="button">添加当前色画布</button>
+      <button id="clearCurrentCanvasBtn" type="button">清空当前画布</button>
+    </div>
+  </div>
+  <div class="brush-palette-title"><strong>常驻取色盘</strong><small>点击或拖动直接选色</small></div>
+  <div class="brush-palette-wrap">
+    <canvas aria-label="常驻画笔取色盘" height="156" id="brushColorPalette" width="260"></canvas>
+  </div>
+  <label class="brush-hue-row" for="brushHueRange">
+    <span>色相</span>
+    <input aria-label="画笔色相" id="brushHueRange" max="360" min="0" step="1" type="range" value="0"/>
+  </label>
+  <div class="brush-current-color-row">
+    <span>当前颜色</span>
+    <i aria-hidden="true" id="brushPanelColorPreview"></i>
+    <input aria-label="精确画笔颜色" id="brushPaletteColor" type="color" value="#222222"/>
+    <output id="brushPaletteHex">#222222</output>
+  </div>
+  <div class="control-line">
+    <label for="brushPanelSize">画笔大小</label>
+    <output id="brushPanelSizeValue">16</output>
+  </div>
+  <input id="brushPanelSize" max="120" min="1" type="range" value="16"/>
+  <div class="drawing-panel-actions">
+    <button id="brushPanelModeBtn" type="button">画笔</button>
+    <button id="eraserPanelModeBtn" type="button">橡皮擦</button>
+  </div>
+  <p class="tool-hint">左键绘画，右键擦除，左键双击油漆桶填充；长按约 1 秒取色。</p>
+</div>
+</section>
+<section aria-label="抠图控制" class="controls">
+<div>
+<div class="label-row">
+<span>编辑</span>
+</div>
+<div class="edit-tools">
+<button disabled="" id="rotateLeftBtn" type="button">左转</button>
+<button disabled="" id="rotateRightBtn" type="button">右转</button>
+<button disabled="" id="flipHorizontalBtn" type="button">水平镜像</button>
+<button disabled="" id="flipVerticalBtn" type="button">垂直镜像</button>
+<button disabled="" id="addShadowBtn" type="button">添加底部阴影</button>
+<button disabled="" id="addOutlineBtn" type="button">添加描边</button>
+</div>
+</div>
+<div class="shadow-tools">
+<div class="label-row"><span>底部阴影</span><small>点击按钮进入调整，再次点击确认</small></div>
+<div class="control-line"><label for="shadowStrength">阴影强度</label><output id="shadowStrengthValue">34%</output></div>
+<input id="shadowStrength" max="100" min="0" type="range" value="34"/>
+<div class="control-line"><label for="shadowSize">阴影大小</label><output id="shadowSizeValue">100%</output></div>
+<input id="shadowSize" max="200" min="20" type="range" value="100"/>
+<p class="tool-hint">进入阴影调整后，可直接在画布上拖动阴影位置。</p>
+</div>
+<div class="outline-tools">
+<div class="outline-row">
+<label for="outlineColor">描边颜色</label>
+<input id="outlineColor" type="color" value="#333333"/>
+</div>
+<div class="control-line">
+<label for="outlineStrength">描边强度</label>
+<output id="outlineStrengthValue">4</output>
+</div>
+<input id="outlineStrength" max="32" min="1" type="range" value="4"/>
+</div>
+<div class="iconify-tools">
+<div class="outline-row">
+<label for="iconifySizePreset">图标尺寸</label>
+<select id="iconifySizePreset">
+<option value="32">32 × 32</option>
+<option selected="" value="64">64 × 64</option>
+<option value="128">128 × 128</option>
+<option value="custom">自定义</option>
+</select>
+</div>
+<div class="export-custom-size" id="iconifyCustomSize">
+<input aria-label="图标宽度" id="iconifyWidth" max="512" min="8" step="1" type="number" value="64"/>
+<span>×</span>
+<input aria-label="图标高度" id="iconifyHeight" max="512" min="8" step="1" type="number" value="64"/>
+</div>
+<label class="toggle compact-toggle">
+<input id="iconifyKeepPadding" type="checkbox"/>
+<span>保留透明边</span>
+</label>
+<button disabled="" id="iconifyResizeBtn" type="button">图标化缩小</button>
+</div>
+<label class="toggle">
+<input id="squareGreenCrop" type="checkbox"/>
+<span>裁剪后补绿幕为正方形</span>
+</label>
+<div class="size-crop">
+<div class="label-row">
+<span>尺寸裁剪</span>
+</div>
+<div class="size-inputs">
+<input id="cropWidth" min="1" placeholder="宽" type="number"/>
+<input id="cropHeight" min="1" placeholder="高" type="number"/>
+<button disabled="" id="centerCropBtn" type="button">居中裁剪</button>
+</div>
+</div>
+<div class="control-line">
+<label for="tolerance">颜色容差</label>
+<output id="toleranceValue">42</output>
+</div>
+<input id="tolerance" max="180" min="0" type="range" value="42"/>
+<div class="control-line">
+<label for="softness">边缘柔化</label>
+<output id="softnessValue">18</output>
+</div>
+<input id="softness" max="80" min="0" type="range" value="18"/>
+<label class="toggle">
+<input checked="" id="contiguous" type="checkbox"/>
+<span>只清除连通背景</span>
+</label>
+<label class="toggle">
+<input id="forceRemoveColor" type="checkbox"/>
+<span>强力删除所选颜色</span>
+</label>
+<section aria-label="去除水印" class="watermark-tools">
+<div class="label-row"><span>去除水印</span><small>批量清除序列帧同一区域</small></div>
+<button disabled="" id="removeWatermarkBtn" type="button">框选水印区域</button>
+<p class="tool-hint">进入后在当前帧拖出水印区域，松开后会将同一相对区域应用到全部序列帧。</p>
+</section>
+<div class="picked-colors-panel" hidden="" id="pickedColorsPanel">
+<div class="label-row">
+<span>已选颜色</span>
+<button aria-label="清空颜色" class="icon-btn" id="clearColors" title="清空颜色" type="button">×</button>
+</div>
+<div aria-live="polite" class="swatches" id="swatches"></div>
+</div>
+<section aria-label="抠图结果处理" class="cutout-advanced">
+<div class="label-row"><span>抠图结果处理</span><small>所有结果保存到处理结果库</small></div>
+<label class="toggle"><input id="autoNameAssets" type="checkbox"/><span>自动识别文字命名</span></label>
+<label class="toggle"><input id="removeRecognizedText" type="checkbox"/><span>识别后删除图片文字</span></label>
+<div class="ocr-runtime-row"><small class="ocr-runtime-hint" id="ocrRuntimeHint">正在检查 OCR 运行方式…</small><button id="ocrSelfTestBtn" type="button">检测 OCR</button></div>
+<div class="cutout-action-grid">
+<button disabled="" id="trimTransparentBtn" type="button">去透明边</button>
+<button disabled="" id="cleanPseudoAlphaBtn" type="button">净化透明背景</button>
+<button disabled="" id="fillInternalPixelsBtn" type="button">补齐内部透明像素</button>
+</div>
+<div class="dual-alpha-tools">
+<div class="label-row"><span>双背景重建</span><small>仅从原始图片库选择</small></div>
+<div class="alpha-source-picker-grid">
+<button class="alpha-pair-slot alpha-source-choice" id="alphaWhiteSlot" type="button"><span aria-hidden="true" class="alpha-pair-dot"></span><img alt="" hidden="" id="alphaWhitePreview"/><small id="alphaWhiteName">添加白底</small></button>
+<button class="alpha-pair-slot alpha-source-choice" id="alphaBlackSlot" type="button"><span aria-hidden="true" class="alpha-pair-dot"></span><img alt="" hidden="" id="alphaBlackPreview"/><small id="alphaBlackName">添加黑底</small></button>
+</div>
+<button disabled="" id="rebuildAlphaBtn" type="button">用黑白底图重建</button>
+<button class="alpha-pair-slot alpha-source-choice alpha-source-choice-full" id="dualAlphaSourceSlot" type="button"><span aria-hidden="true" class="alpha-pair-dot"></span><img alt="" hidden="" id="dualAlphaPreview"/><small id="dualAlphaName">添加双背景</small></button>
+<button disabled="" id="splitDualAlphaBtn" type="button">拆分双背景图并重建</button>
+</div>
+</section><div class="cutout-commit-row" hidden=""><button class="primary" disabled="" id="removeBtn" type="button">保存抠图结果</button></div></section>
+<div class="actions">
+<button disabled="" id="undoBtn" type="button">撤销</button>
+<button disabled="" id="redoBtn" type="button">重做</button>
+<button disabled="" id="resetBtn" type="button">还原</button>
+</div>
+<p class="status" id="status">请先选择一张图片。</p>
+</aside><aside aria-label="图片库" class="library-dock"><div class="library-dock-head"><div><h2>图片库</h2><p>三个库可分别展开。进入多选后，普通点击只查看或补选当前项，不会清空其他选择；右键仅取消当前项。Shift 选择区间，Ctrl 逐项选择，Del 删除。双击缩略图放大。</p></div><button id="libraryDockToggleBtn" type="button" aria-expanded="true">收起图库</button></div></aside>
+<section aria-label="图片工作区" class="workspace">
+<div aria-label="画布标签" class="canvas-tabs" id="canvasTabs" role="tablist"></div>
+<div class="toolbar">
+<div aria-label="显示模式" class="mode-tabs" role="tablist">
+<button class="active" id="resultTab" type="button">结果</button>
+<button id="originalTab" type="button">原图</button>
+</div>
+<div aria-label="常用画布工具" class="canvas-main-tools" id="canvasMainTools" role="group">
+<button id="pickModeBtn" type="button">取背景色</button>
+<button id="extractModeBtn" title="点击主体内部。透明背景直接提取；纯色外背景或内层色块会自动识别并剥离。" type="button">提取主体</button>
+<button id="cropModeBtn" type="button">矩形裁剪</button>
+<button id="lassoModeBtn" type="button">自由裁剪</button>
+<button class="cancel-tool tool-session-action" hidden="" id="cancelToolBtn" type="button">取消</button>
+<button class="finish-tool tool-session-action" disabled="" hidden="" id="finishToolBtn" type="button">完成</button>
+<button id="brushModeBtn" type="button">画笔</button>
+<button id="eraserModeBtn" type="button">橡皮擦</button>
+<button disabled="" id="smoothEdgesBtn" type="button">去锯齿/毛刺</button>
+<div class="tool-popover brush-size-popover" hidden="" id="brushSizePopover">
+<div class="tool-popover-head"><strong>画笔大小</strong><output id="brushSizeValue">16</output></div>
+<input id="brushSize" max="120" min="1" type="range" value="16"/>
+<div class="tool-popover-color-row"><span>当前颜色</span><i aria-hidden="true" id="brushColorPreview"></i></div>
+</div>
+<div class="tool-popover eraser-size-popover" hidden="" id="eraserSizePopover">
+<div class="tool-popover-head"><strong>橡皮大小</strong><output id="eraserSizeValue">24</output></div>
+<input id="eraserSize" max="120" min="1" type="range" value="24"/>
+</div>
+</div>
+<div aria-label="画布背景" class="canvas-bg-tools">
+<button class="active" id="checkerBgBtn" type="button">棋盘</button>
+<button id="darkBgBtn" type="button">黑底</button>
+<button id="lightBgBtn" type="button">白底</button>
+<button id="greenBgBtn" type="button">绿底</button>
+<input aria-label="自定义画布背景色" id="customBgColor" type="color" value="#ff00ff"/>
+</div>
+<button disabled="" id="fitBtn" type="button">适应窗口</button>
+</div>
+<div class="stage" id="stage">
+<div class="canvas-scene" id="canvasScene">
+<canvas aria-label="图片画布" id="canvas"></canvas>
+<canvas aria-label="选区画布" id="selectionCanvas"></canvas>
+<div class="crop-box" hidden="" id="cropBox"></div>
+</div>
+<div class="empty-state" id="emptyState"></div>
+</div>
+<section aria-label="序列帧操作栏" class="sequence-canvas-bar" hidden="" id="sequenceCanvasBar">
+<div class="sequence-canvas-position"><span>序列帧</span><button aria-label="上一帧" id="previousSequenceFrameBtn" title="上一帧" type="button">‹</button><output id="sequenceFramePosition">0 / 0</output><button aria-label="下一帧" id="nextSequenceFrameBtn" title="下一帧" type="button">›</button></div>
+<div class="sequence-canvas-actions"><button id="copyCurrentFrameBtn" title="复制当前帧，并插入到序列帧库当前帧的后一帧" type="button">复制当前帧</button><label class="sequence-frame-delay-control" for="frameDelayInput" title="只延长当前帧的播放时间，0 表示按普通 FPS 播放"><span>当前帧额外停留</span><input aria-label="当前帧额外停留毫秒数" id="frameDelayInput" max="10000" min="0" step="50" type="number" value="0"/><b>ms</b></label><label class="sequence-fps-control" for="fpsInput"><span>播放 FPS</span><input aria-label="播放帧率" id="fpsInput" max="60" min="1" type="number" value="8"/></label><button disabled="" id="playFramesBtn" type="button">播放</button><button id="openFramePickerFromBarBtn" type="button">选帧</button></div>
+</section>
+</section>
+</main>
+<div class="frame-picker" hidden="" id="framePicker">
+<section aria-label="序列帧选择" class="frame-picker-panel">
+<div class="frame-picker-head">
+<div>
+<h2>选择序列帧</h2>
+<p id="framePickerInfo">0 帧</p>
+</div>
+<button id="closeFramePickerBtn" type="button">关闭</button>
+</div>
+<div class="frame-picker-actions">
+<button id="pickerSelectAllBtn" type="button">全选</button>
+<button id="pickerClearBtn" type="button">取消选择</button>
+<button id="pickerInvertBtn" type="button">反选</button>
+</div>
+<div aria-label="序列帧列表" aria-live="polite" class="frame-picker-grid" id="framePickerGrid"></div>
+</section>
+</div>
+<div class="frame-picker" hidden="" id="originalSourcePicker">
+<section aria-label="原图选择" class="frame-picker-panel">
+<div class="frame-picker-head">
+<div><h2 id="originalSourcePickerTitle">选择原图</h2><p id="originalSourcePickerInfo">0 张原图</p></div>
+<button id="closeOriginalSourcePickerBtn" type="button">关闭</button>
+</div>
+<div class="frame-picker-actions source-picker-actions"><button id="clearOriginalSourceChoiceBtn" type="button">取消当前选择</button></div>
+<div aria-label="原始图片列表" aria-live="polite" class="frame-picker-grid source-picker-grid" id="originalSourcePickerGrid"></div>
+</section>
+</div>
+<div class="app-modal" hidden="" id="importDialog">
+<section aria-labelledby="importDialogTitle" class="app-dialog import-dialog-panel">
+<div class="dialog-head">
+<div><h2 id="importDialogTitle">导入素材</h2><p>图片进入原始图片库；视频进入序列帧工具等待抽帧。</p></div>
+<button id="closeImportDialogBtn" type="button">关闭</button>
+</div>
+<div class="import-choice-grid">
+<label class="import-choice primary-choice" for="imageInput">
+<strong>导入图片</strong>
+<span>支持多选 PNG、JPG、WebP 等图片</span>
+</label>
+<label class="import-choice" for="videoInput">
+<strong>导入视频</strong>
+<span>支持 MP4、WebM、MOV，导入后到序列帧中抽帧</span>
+</label>
+</div>
+</section>
+<input accept="image/*" id="imageInput" multiple="" type="file"/><input accept="video/*" id="videoInput" type="file"/></div><div class="app-modal" hidden="" id="exportDialog">
+<section aria-labelledby="exportDialogTitle" class="app-dialog export-dialog-panel">
+<div class="dialog-head">
+<div><h2 id="exportDialogTitle">导出</h2><p>单张自动导出 PNG，多张自动打包 ZIP；图集导出前会确认是否进行主体对齐。</p></div>
+<button id="closeExportDialogBtn" type="button">关闭</button>
+</div>
+<div id="exportDialogContent"><section aria-label="导出" class="export-panel">
+<div class="label-row">
+<span>导出</span>
+</div>
+<div class="export-location">
+<output id="exportLocationName" title="当前导出位置">默认下载文件夹</output>
+<button id="chooseExportLocationBtn" type="button">选择位置</button>
+<button disabled="" id="clearExportLocationBtn" type="button">恢复默认</button>
+</div>
+<label class="export-name-control" for="exportBaseName">
+<span>导出名称</span>
+<input id="exportBaseName" maxlength="120" placeholder="输入导出文件名称" spellcheck="false" type="text"/>
+<small>只修改导出文件名，不会修改素材库名称；序列帧会自动追加顺序号。</small>
+</label>
+<div class="export-size-controls">
+<label>
+<span>导出尺寸</span>
+<select id="exportSizePreset">
+<option value="original">原始尺寸</option>
+<option value="32">32 × 32</option>
+<option value="64">64 × 64</option>
+<option value="128">128 × 128</option>
+<option value="256">256 × 256</option>
+<option value="512">512 × 512</option>
+<option value="custom">自定义</option>
+</select>
+</label>
+<div class="export-custom-size" id="exportCustomSize">
+<input aria-label="导出宽度" id="exportWidth" max="4096" min="1" step="1" type="number" value="32"/>
+<span>×</span>
+<input aria-label="导出高度" id="exportHeight" max="4096" min="1" step="1" type="number" value="32"/>
+</div>
+<label class="toggle compact-toggle">
+<input id="exportKeepPadding" type="checkbox"/>
+<span>保留透明边</span>
+</label>
+<label class="toggle compact-toggle">
+<input id="exportGreenScreen" type="checkbox"/>
+<span>导出为绿幕背景</span>
+</label>
+</div>
+<p class="export-action-hint" id="exportModeHint">单张导出 PNG，多张自动导出 ZIP。</p>
+<div class="export-actions export-actions-simple">
+<button disabled="" id="downloadBtn" type="button">导出</button>
+<button disabled="" id="exportSheetBtn" type="button">导出图集</button>
+</div>
+</section></div>
+</section>
+</div><div class="app-modal sheet-alignment-modal" hidden="" id="sheetAlignmentDialog">
+<section aria-labelledby="sheetAlignmentDialogTitle" class="app-dialog sheet-alignment-dialog-panel">
+<div class="dialog-head"><div><h2 id="sheetAlignmentDialogTitle">图集对齐方式</h2><p>选择生成图集前是否统一主体位置。不会修改素材库中的原图。</p></div></div>
+<div class="sheet-alignment-actions">
+<button id="exportSheetAlignedBtn" type="button">主体居中 / 底部对齐</button>
+<button id="exportSheetOriginalBtn" type="button">保持原始位置</button>
+<button id="cancelSheetExportBtn" type="button">取消导出</button>
+</div>
+</section>
+</div><div aria-busy="true" aria-live="assertive" class="operation-busy" hidden="" id="operationBusyOverlay">
+<div class="operation-busy-card"><span aria-hidden="true" class="busy-spinner"></span><strong id="operationBusyText">正在处理…</strong></div>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=temporal-pixel-stability-33"></script><script src="ui-shell.js?v=single-frame-delay-31"></script></body></html>
