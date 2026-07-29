@@ -1088,6 +1088,58 @@ function cloneOptionalImageData(imageData) {
   return imageData ? cloneImageData(imageData) : null;
 }
 
+const fullResolutionRecipeKinds = new Set([
+  "rotate",
+  "flip",
+  "smoothEdges",
+  "shadow",
+  "outline",
+  "trimTransparent",
+  "cleanPseudoAlpha",
+  "fillInternalPixels",
+  "cutout"
+]);
+
+function cloneRecipeValue(value) {
+  if (value == null || typeof value !== "object") return value ?? null;
+  if (Array.isArray(value)) return value.map(cloneRecipeValue);
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneRecipeValue(entry)]));
+}
+
+function cloneFullResolutionPipeline(pipeline) {
+  return Array.isArray(pipeline)
+    ? pipeline.map((recipe) => ({ kind: recipe.kind, value: cloneRecipeValue(recipe.value) }))
+    : [];
+}
+
+function derivedFullResolutionOptions(record, operation, value = null) {
+  if (!record?.fullResolutionSource || !fullResolutionRecipeKinds.has(operation)) {
+    return { fullResolutionSource: null, fullResolutionPipeline: [] };
+  }
+  return {
+    fullResolutionSource: record.fullResolutionSource,
+    fullResolutionPipeline: [
+      ...cloneFullResolutionPipeline(record.fullResolutionPipeline),
+      { kind: operation, value: cloneRecipeValue(value) }
+    ]
+  };
+}
+
+function appendFullResolutionRecipe(target, kind, value = null) {
+  if (!target?.fullResolutionSource || !fullResolutionRecipeKinds.has(kind)) return false;
+  target.fullResolutionPipeline = [
+    ...cloneFullResolutionPipeline(target.fullResolutionPipeline),
+    { kind, value: cloneRecipeValue(value) }
+  ];
+  return true;
+}
+
+function invalidateFullResolutionSource(target) {
+  if (!target) return;
+  target.fullResolutionSource = null;
+  target.fullResolutionPipeline = [];
+}
+
 function cloneSequencePlacement(placement) {
   if (!placement) return null;
   const canvasWidth = Math.round(Number(placement.canvasWidth));
@@ -2399,7 +2451,8 @@ function cloneImageItemState(item) {
     thumbnail: item.thumbnail,
     selected: Boolean(item.selected),
     pixelatedPreview: Boolean(item.pixelatedPreview),
-    fullResolutionSource: item.fullResolutionSource || null
+    fullResolutionSource: item.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(item.fullResolutionPipeline)
   };
 }
 
@@ -2412,7 +2465,8 @@ function cloneFrameState(frame) {
     order: frame.order || 0,
     pixelatedPreview: Boolean(frame.pixelatedPreview),
     delayMs: normalizedFrameDelayMs(frame),
-    fullResolutionSource: frame.fullResolutionSource || null
+    fullResolutionSource: frame.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
   };
 }
 
@@ -2432,7 +2486,9 @@ function cloneAssetState(asset) {
     sequencePlacement: cloneSequencePlacement(asset.sequencePlacement),
     recognizing: Boolean(asset.recognizing),
     autoNameFromText: Boolean(asset.autoNameFromText),
-    removeRecognizedText: Boolean(asset.removeRecognizedText)
+    removeRecognizedText: Boolean(asset.removeRecognizedText),
+    fullResolutionSource: asset.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(asset.fullResolutionPipeline)
   };
 }
 
@@ -3731,6 +3787,7 @@ function commitToolSessionBase(session) {
       editable.target.imageData = next;
       editable.target.previewImageData = null;
     } else editable.target.currentImageData = next;
+    invalidateFullResolutionSource(editable.target);
     if (editable.kind !== "original") editable.target.thumbnail = makeThumbnail(next);
   }
   currentImageData = next;
@@ -4090,7 +4147,8 @@ async function loadImageFile(file, options = {}) {
     thumbnail: makeThumbnail(data),
     selected: false,
     pixelatedPreview: false,
-    fullResolutionSource: loaded.source
+    fullResolutionSource: loaded.source,
+    fullResolutionPipeline: []
   };
 }
 
@@ -7431,7 +7489,8 @@ function sourceRecordsForProcessing() {
       name: item.name || "原始图片",
       imageData: item.originalImageData,
       pixelatedPreview: Boolean(item.pixelatedPreview),
-      fullResolutionSource: item.fullResolutionSource || null
+      fullResolutionSource: item.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(item.fullResolutionPipeline)
     }));
   }
   if (processingSource === "result") {
@@ -7443,7 +7502,8 @@ function sourceRecordsForProcessing() {
       name: asset.name || "处理结果",
       imageData: asset.imageData,
       pixelatedPreview: Boolean(asset.pixelatedPreview),
-      fullResolutionSource: asset.fullResolutionSource || null
+      fullResolutionSource: asset.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(asset.fullResolutionPipeline)
     }));
   }
   return [];
@@ -7484,6 +7544,8 @@ function addProcessedAsset(imageData, sourceName, operation, options = {}) {
     sourceKind: options.sourceKind || processingSource,
     sourceName: sourceName || "图片",
     sequencePlacement: cloneSequencePlacement(options.sequencePlacement),
+    fullResolutionSource: options.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(options.fullResolutionPipeline),
     recognizing: false,
     autoNameFromText: false,
     removeRecognizedText: false
@@ -7534,9 +7596,13 @@ function createResultsFromRecords(records, transform, operation, message, option
   records.forEach((record, index) => {
     const next = transform(cloneImageData(record.imageData), record, index);
     if (!next) return;
+    const recipeValue = typeof options.fullResolutionValue === "function"
+      ? options.fullResolutionValue(record, index)
+      : options.fullResolutionValue;
     created.push(addProcessedAsset(next, record.name, operation, {
       sourceKind: record.kind,
-      pixelatedPreview: Boolean(options.pixelatedPreview || record.pixelatedPreview)
+      pixelatedPreview: Boolean(options.pixelatedPreview || record.pixelatedPreview),
+      ...derivedFullResolutionOptions(record, operation, recipeValue)
     }));
   });
   const valid = created.filter(Boolean);
@@ -7609,9 +7675,15 @@ function transformItems(transform, message) {
     transform(item);
     const output = item.currentImageData || item.originalImageData;
     if (!output) return;
+    const fullResolution = derivedFullResolutionOptions(
+      item.__sourceRecord,
+      transform.kind,
+      transform.value
+    );
     created.push(addProcessedAsset(output, item.__sourceRecord.name, transform.kind, {
       sourceKind: item.__sourceRecord.kind,
-      pixelatedPreview: Boolean(item.pixelatedPreview || transform.kind === "iconify" || transform.kind === "contourPixelize")
+      pixelatedPreview: Boolean(item.pixelatedPreview || transform.kind === "iconify" || transform.kind === "contourPixelize"),
+      ...fullResolution
     }));
   });
   const valid = created.filter(Boolean);
@@ -7628,7 +7700,7 @@ function transformItems(transform, message) {
 function transformImageData(imageData, kind, value) {
   if (kind === "rotate") return rotateImageData(imageData, value);
   if (kind === "flip") return flipImageData(imageData, value);
-  if (kind === "smoothEdges") return smoothEdgeImageData(imageData);
+  if (kind === "smoothEdges") return smoothEdgeImageData(imageData, value || {});
   if (kind === "shadow") return addGroundShadowImageData(imageData);
   if (kind === "outline") return addOutlineImageData(imageData, value);
   if (kind === "iconify") return iconifyImageData(imageData, value);
@@ -8100,6 +8172,9 @@ function transformFrames(kind, value, message) {
   pushHistory();
   targets.forEach((frame) => {
     frame.imageData = transformImageData(frame.imageData, kind, value);
+    if (!appendFullResolutionRecipe(frame, kind, value) && !fullResolutionRecipeKinds.has(kind)) {
+      invalidateFullResolutionSource(frame);
+    }
     if (kind === "iconify" || kind === "contourPixelize") frame.pixelatedPreview = true;
   });
   refreshFrameEditPreview(targets, message);
@@ -8219,6 +8294,9 @@ async function smoothEdges() {
         frames[index].imageData = smoothEdgeImageData(frames[index].imageData, {
           pixelArt: Boolean(frames[index].pixelatedPreview)
         });
+        appendFullResolutionRecipe(frames[index], "smoothEdges", {
+          pixelArt: Boolean(frames[index].pixelatedPreview)
+        });
         frames[index].thumbnail = makeThumbnail(frames[index].imageData);
         await yieldToBrowser(0);
       }
@@ -8241,7 +8319,12 @@ async function smoothEdges() {
       const next = smoothEdgeImageData(cloneImageData(record.imageData), {
         pixelArt: Boolean(record.pixelatedPreview)
       });
-      if (replaceSourceRecordImageData(record, next)) modified.push(record);
+      if (replaceSourceRecordImageData(record, next)) {
+        appendFullResolutionRecipe(record.target, "smoothEdges", {
+          pixelArt: Boolean(record.pixelatedPreview)
+        });
+        modified.push(record);
+      }
       await yieldToBrowser(0);
     }
     if (modified.length > 0) {
@@ -8305,7 +8388,10 @@ function commitGroundShadow() {
     const targets = targetFrames();
     if (!targets.length) return;
     pushHistory();
-    targets.forEach((frame) => { frame.imageData = transformOne(frame.imageData); });
+    targets.forEach((frame) => {
+      frame.imageData = transformOne(frame.imageData);
+      appendFullResolutionRecipe(frame, "shadow", common);
+    });
     setClickMode("view", { silent: true });
     refreshFrameEditPreview(targets, "已添加可调底部阴影");
     return;
@@ -8313,7 +8399,13 @@ function commitGroundShadow() {
   const records = sourceRecordsForProcessing();
   if (!records.length) return;
   setClickMode("view", { silent: true });
-  createResultsFromRecords(records, (imageData) => transformOne(imageData), "shadow", "已添加可调底部阴影");
+  createResultsFromRecords(
+    records,
+    (imageData) => transformOne(imageData),
+    "shadow",
+    "已添加可调底部阴影",
+    { fullResolutionValue: common }
+  );
 }
 
 function addGroundShadow() {
@@ -8510,6 +8602,7 @@ async function applyContourPixelize() {
       const { converted } = await contourPixelizeSequenceFramesShared(frames, options, sequenceFrames);
       for (let index = 0; index < frames.length; index += 1) {
         frames[index].imageData = converted[index];
+        invalidateFullResolutionSource(frames[index]);
         frames[index].pixelatedPreview = true;
       }
       refreshFrameEditPreview(
@@ -8555,6 +8648,7 @@ function applyAllFrameEffects() {
   pushHistory();
   targets.forEach((frame, index) => {
     frame.imageData = applyCurrentEffectsToImageData(frame.imageData);
+    invalidateFullResolutionSource(frame);
     frame.thumbnail = makeThumbnail(frame.imageData);
     if (index % 12 === 0) setStatus(`正在应用当前效果 ${index + 1}/${targets.length}...`);
   });
@@ -10422,6 +10516,7 @@ function cropFrames(selection, message) {
     if (frameSelection.width < 4 || frameSelection.height < 4) return;
     const greenFill = dominantSelectionOutsideColor(frame.imageData, frameSelection);
     frame.imageData = finalizeCroppedImageData(cropImageData(frame.imageData, frameSelection), greenFill);
+    invalidateFullResolutionSource(frame);
     changed.push(frame);
   });
   if (changed.length === 0) {
@@ -10442,6 +10537,7 @@ function cropFramesByLasso(message) {
     if (!cropped) return;
     const greenFill = dominantSelectionOutsideColor(frame.imageData, lassoBoundsForImage(frame.imageData));
     frame.imageData = finalizeCroppedImageData(cropped, greenFill);
+    invalidateFullResolutionSource(frame);
     changed.push(frame);
   });
   if (changed.length === 0) {
@@ -10493,6 +10589,7 @@ function centerCrop() {
         height: Math.min(height, frame.imageData.height)
       };
       frame.imageData = cropImageData(frame.imageData, selection);
+      invalidateFullResolutionSource(frame);
     });
     refreshFrameEditPreview(frames, `已将序列帧居中裁剪为 ${width}×${height}`);
     return;
@@ -10628,6 +10725,16 @@ function setOperationBusyState(busy, message = "正在处理…", options = {}) 
   setButtons();
 }
 
+function currentCutoutRecipeValue() {
+  return {
+    colors: pickedColors.map(({ r, g, b }) => ({ r, g, b })),
+    tolerance: Number(tolerance.value),
+    softness: Number(softness.value),
+    contiguous: Boolean(contiguous.checked),
+    forceRemove: Boolean(forceRemoveColor?.checked)
+  };
+}
+
 async function removeColors() {
   if (pickedColors.length === 0 || operationBusy) return;
 
@@ -10640,6 +10747,7 @@ async function removeColors() {
   const records = processingSource === "sequence" ? [] : sourceRecordsForProcessing();
   const targetCount = frameTargets.length || records.length;
   if (!targetCount) return;
+  const fullResolutionCutoutValue = currentCutoutRecipeValue();
   const cachedPreviewReady = Boolean(
     livePreviewFullImageData
     && livePreviewFullBase === liveBaseImageData
@@ -10661,6 +10769,7 @@ async function removeColors() {
         frame.imageData = canReuse
           ? cloneImageData(livePreviewFullImageData)
           : await buildCutoutForCommit(frame.imageData);
+        appendFullResolutionRecipe(frame, "cutout", fullResolutionCutoutValue);
         frame.thumbnail = makeThumbnail(frame.imageData);
         if (frameTargets.length > 1) await yieldToBrowser(0);
       }
@@ -10689,7 +10798,8 @@ async function removeColors() {
         pixelatedPreview: Boolean(record.pixelatedPreview),
         previewImageData,
         deferThumbnail: true,
-        takeOwnership: true
+        takeOwnership: true,
+        ...derivedFullResolutionOptions(record, "cutout", fullResolutionCutoutValue)
       });
       if (asset) created.push(asset);
       if (records.length > 1) await yieldToBrowser(0);
@@ -11061,20 +11171,23 @@ function currentExportItems() {
     return chosenSequenceFrames().map(({ frame, index }) => ({
       name: `${frame.name || "frame"}-${String(index + 1).padStart(4, "0")}.png`,
       imageData: frame.imageData,
-      fullResolutionSource: frame.fullResolutionSource || null
+      fullResolutionSource: frame.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
     }));
   }
   if (processingSource === "result") {
     return selectedOrActiveAssets().filter((asset) => asset?.imageData).map((asset, index) => ({
       name: `${asset.name || `result-${index + 1}`}.png`,
       imageData: asset.imageData,
-      fullResolutionSource: asset.fullResolutionSource || null
+      fullResolutionSource: asset.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(asset.fullResolutionPipeline)
     }));
   }
   return selectedOrActiveOriginals().map((item, index) => ({
     name: `${item.name || `image-${index + 1}`}`.replace(/\.(png|jpe?g|webp|gif|bmp)$/i, "") + ".png",
     imageData: item.currentImageData || item.originalImageData,
-    fullResolutionSource: item.fullResolutionSource || null
+    fullResolutionSource: item.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(item.fullResolutionPipeline)
   })).filter((item) => item.imageData);
 }
 
@@ -11091,8 +11204,46 @@ async function materializeExportItem(item) {
   if (!exportNeedsFullResolution(item)) return item;
   setStatus(`正在按需解码“${item.name}”的完整原图…`);
   try {
-    const imageData = await materializeFullResolution(item.fullResolutionSource);
-    return imageData ? { ...item, imageData } : item;
+    let imageData = await materializeFullResolution(item.fullResolutionSource);
+    if (!imageData) return item;
+    for (const recipe of cloneFullResolutionPipeline(item.fullResolutionPipeline)) {
+      if (recipe.kind === "cutout") {
+        const settings = recipe.value || {};
+        const saved = {
+          pickedColors,
+          tolerance: tolerance.value,
+          softness: softness.value,
+          contiguous: contiguous.checked,
+          forceRemove: forceRemoveColor?.checked
+        };
+        try {
+          pickedColors = (settings.colors || []).map((color) => ({ ...color }));
+          tolerance.value = String(settings.tolerance ?? tolerance.value);
+          softness.value = String(settings.softness ?? softness.value);
+          contiguous.checked = Boolean(settings.contiguous);
+          if (forceRemoveColor) forceRemoveColor.checked = Boolean(settings.forceRemove);
+          imageData = buildCutoutFromBase(imageData);
+        } finally {
+          pickedColors = saved.pickedColors;
+          tolerance.value = saved.tolerance;
+          softness.value = saved.softness;
+          contiguous.checked = saved.contiguous;
+          if (forceRemoveColor) forceRemoveColor.checked = saved.forceRemove;
+        }
+      } else {
+        let recipeValue = recipe.value;
+        if (recipe.kind === "outline" && recipeValue?.size && item.fullResolutionSource?.proxyWidth) {
+          const scaleRatio = imageData.width / item.fullResolutionSource.proxyWidth;
+          recipeValue = {
+            ...recipeValue,
+            size: Math.max(1, Math.round(Number(recipeValue.size) * scaleRatio))
+          };
+        }
+        imageData = transformImageData(imageData, recipe.kind, recipeValue);
+      }
+      await yieldToBrowser(0);
+    }
+    return { ...item, imageData };
   } catch (error) {
     console.error(error);
     setStatus(`“${item.name}”完整原图解码失败，已改用代理图导出。`);
@@ -11260,7 +11411,8 @@ async function downloadAll() {
     assetLibrary.map((asset, index) => ({
       name: `${asset.name || `result-${index + 1}`}.png`,
       imageData: asset.imageData,
-      fullResolutionSource: asset.fullResolutionSource || null
+      fullResolutionSource: asset.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(asset.fullResolutionPipeline)
     })),
     "processed-results.zip",
     "处理结果"
@@ -11303,7 +11455,8 @@ async function exportSequenceFrames() {
     const item = await materializeExportItem({
       name,
       imageData: frame.imageData,
-      fullResolutionSource: frame.fullResolutionSource || null
+      fullResolutionSource: frame.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
     });
     await downloadDataUrl(withExportSizeSuffix(name, item.imageData), canvasDataUrlFor(item.imageData));
     finishExportSuccess("当前序列帧 PNG 已保存。");
@@ -11313,7 +11466,8 @@ async function exportSequenceFrames() {
     selected.map(({ frame }, exportIndex) => ({
       name: `${requestedExportBaseName()}-${String(exportIndex + 1).padStart(4, "0")}.png`,
       imageData: frame.imageData,
-      fullResolutionSource: frame.fullResolutionSource || null
+      fullResolutionSource: frame.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
     })),
     `${requestedExportBaseName()}.zip`,
     "序列帧"
@@ -11461,7 +11615,8 @@ async function exportSequenceZip() {
     const exportItem = await materializeExportItem({
       name: frame.name || "frame",
       imageData: frame.imageData,
-      fullResolutionSource: frame.fullResolutionSource || null
+      fullResolutionSource: frame.fullResolutionSource || null,
+      fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
     });
     const number = String(originalIndex + 1).padStart(4, "0");
     const baseName = (frame.name || "frame").replace(/[\\/:*?"<>|]/g, "_");
@@ -11492,7 +11647,8 @@ function frameFromImageItem(item, fallbackName) {
     order: 0,
     pixelatedPreview: Boolean(item.pixelatedPreview),
     delayMs: normalizedFrameDelayMs(item),
-    fullResolutionSource: placement ? null : (item.fullResolutionSource || null)
+    fullResolutionSource: placement ? null : (item.fullResolutionSource || null),
+    fullResolutionPipeline: placement ? [] : cloneFullResolutionPipeline(item.fullResolutionPipeline)
   };
 }
 
@@ -11529,7 +11685,8 @@ async function importSequenceFiles(fileList) {
       sequenceFrames.push(frameFromImageItem({
         name: loaded.name,
         imageData: loaded.imageData,
-        fullResolutionSource: loaded.fullResolutionSource
+        fullResolutionSource: loaded.fullResolutionSource,
+        fullResolutionPipeline: []
       }, `frame-${sequenceFrames.length + 1}`));
       added += 1;
     } catch (error) {
@@ -11593,6 +11750,7 @@ function normalizeSequenceFramesBottom() {
     const dx = Math.round((width - frame.imageData.width) / 2);
     const dy = Math.round(height - subjectBottom);
     frame.imageData = drawImageDataOnCanvas(frame.imageData, width, height, dx, dy);
+    invalidateFullResolutionSource(frame);
   });
   refreshFrameEditPreview(targets, `已统一为 ${width}×${height} 并按主体底部对齐`);
 }
@@ -11601,7 +11759,12 @@ function saveFramesToResults() {
   const targets = targetFrames().length ? targetFrames() : sequenceFrames.slice();
   if (!targets.length) return;
   pushHistory();
-  const created = targets.map((frame) => addProcessedAsset(frame.imageData, frame.name, "处理结果", { sourceKind: "sequence", pixelatedPreview: frame.pixelatedPreview }));
+  const created = targets.map((frame) => addProcessedAsset(frame.imageData, frame.name, "处理结果", {
+    sourceKind: "sequence",
+    pixelatedPreview: frame.pixelatedPreview,
+    fullResolutionSource: frame.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(frame.fullResolutionPipeline)
+  }));
   activateProcessedAsset(created[created.length - 1]);
   setStatus(`已将 ${created.length} 个序列帧保存到处理结果库。`);
 }
@@ -11638,6 +11801,7 @@ function deleteSelectedBlock() {
       const next = deleteSelectionFromImageData(frame.imageData);
       if (!next) return;
       frame.imageData = next;
+      invalidateFullResolutionSource(frame);
       changed.push(frame);
     });
     if (changed.length) refreshFrameEditPreview(changed, "已删除序列帧中的选区图块");
@@ -11775,6 +11939,7 @@ function prepareCurrentImageForEraser() {
     editable.target.imageData = working;
     editable.target.previewImageData = null;
   } else editable.target.currentImageData = working;
+  invalidateFullResolutionSource(editable.target);
   currentImageData = working;
   liveBaseImageData = null;
   return editable;
@@ -12222,7 +12387,9 @@ function copyCurrentSequenceFrame() {
     selected: true,
     order: 1,
     pixelatedPreview: Boolean(sourceFrame.pixelatedPreview),
-    delayMs: normalizedFrameDelayMs(sourceFrame)
+    delayMs: normalizedFrameDelayMs(sourceFrame),
+    fullResolutionSource: sourceFrame.fullResolutionSource || null,
+    fullResolutionPipeline: cloneFullResolutionPipeline(sourceFrame.fullResolutionPipeline)
   };
   const insertIndex = sourceIndex + 1;
 
@@ -12309,6 +12476,7 @@ function alignSequenceSubjects() {
     const dy = targetY - bounds.centerY;
     const aligned = drawImageDataOnCanvas(frame.imageData, maxWidth, maxHeight, dx, dy);
     frame.imageData = aligned;
+    invalidateFullResolutionSource(frame);
     frame.thumbnail = makeThumbnail(aligned);
   });
 
@@ -12572,6 +12740,7 @@ function applyWatermarkSelectionToAllFrames() {
       height: normalized.height * next.height
     });
     frame.imageData = next;
+    invalidateFullResolutionSource(frame);
     frame.thumbnail = makeThumbnail(next);
   });
   const active = sequenceFrames[activeFrameIndex];
