@@ -1,3 +1,15 @@
+import {
+  chooseProxyMaxSide,
+  createImageSource,
+  materializeFullResolution
+} from "./modules/core/image-runtime.js";
+import {
+  estimateWorkspaceBytes,
+  formatBytes,
+  memoryPolicy,
+  memoryPressureLevel
+} from "./modules/core/memory-budget.js";
+
 const input = document.querySelector("#imageInput");
 const videoInput = document.querySelector("#videoInput");
 const canvas = document.querySelector("#canvas");
@@ -38,6 +50,7 @@ const forceRemoveColor = document.querySelector("#forceRemoveColor");
 const swatches = document.querySelector("#swatches");
 const pickedColorsPanel = document.querySelector("#pickedColorsPanel");
 const statusText = document.querySelector("#status");
+const memoryUsageIndicator = document.querySelector("#memoryUsageIndicator");
 const removeBtn = document.querySelector("#removeBtn");
 const cutoutCommitRow = removeBtn?.closest(".cutout-commit-row");
 const undoBtn = document.querySelector("#undoBtn");
@@ -914,6 +927,7 @@ const exportSettingsDbName = "cutout-tool-settings";
 const exportSettingsStoreName = "settings";
 const maxHistoryStates = 12;
 const maxRedoStates = 12;
+const workspaceMemoryPolicy = memoryPolicy(navigator.deviceMemory || 4);
 
 function pushBoundedState(stack, state, limit) {
   stack.push(state);
@@ -922,6 +936,45 @@ function pushBoundedState(stack, state, limit) {
 
 function setStatus(message) {
   statusText.textContent = message;
+}
+
+function workspaceMemoryReport() {
+  return estimateWorkspaceBytes({
+    images,
+    sequenceFrames,
+    assetLibrary,
+    history,
+    redoStack,
+    originalImageData,
+    currentImageData,
+    liveBaseImageData
+  });
+}
+
+function updateMemoryIndicator() {
+  if (!memoryUsageIndicator) return;
+  const report = workspaceMemoryReport();
+  const level = memoryPressureLevel(report.totalBytes, workspaceMemoryPolicy);
+  memoryUsageIndicator.dataset.level = level;
+  memoryUsageIndicator.textContent = `内存 ${formatBytes(report.totalBytes)} / ${formatBytes(workspaceMemoryPolicy.softLimitBytes)}`;
+  memoryUsageIndicator.title = [
+    `像素缓冲：${formatBytes(report.pixelBytes)}`,
+    `原始压缩源：${formatBytes(report.encodedBytes)}`,
+    "导入图片使用代理预览；原始压缩文件保留到导出时按需解码。"
+  ].join("\n");
+}
+
+function compactHistoryForMemory() {
+  let report = workspaceMemoryReport();
+  while (history.length > 3 && report.totalBytes > workspaceMemoryPolicy.softLimitBytes) {
+    history.shift();
+    report = workspaceMemoryReport();
+  }
+  while (redoStack.length > 2 && report.totalBytes > workspaceMemoryPolicy.softLimitBytes) {
+    redoStack.shift();
+    report = workspaceMemoryReport();
+  }
+  updateMemoryIndicator();
 }
 
 let exportSuccessToastTimer = null;
@@ -2345,7 +2398,8 @@ function cloneImageItemState(item) {
     history: [],
     thumbnail: item.thumbnail,
     selected: Boolean(item.selected),
-    pixelatedPreview: Boolean(item.pixelatedPreview)
+    pixelatedPreview: Boolean(item.pixelatedPreview),
+    fullResolutionSource: item.fullResolutionSource || null
   };
 }
 
@@ -2357,7 +2411,8 @@ function cloneFrameState(frame) {
     selected: Boolean(frame.selected),
     order: frame.order || 0,
     pixelatedPreview: Boolean(frame.pixelatedPreview),
-    delayMs: normalizedFrameDelayMs(frame)
+    delayMs: normalizedFrameDelayMs(frame),
+    fullResolutionSource: frame.fullResolutionSource || null
   };
 }
 
@@ -2439,6 +2494,7 @@ function pushHistory() {
   if (!currentImageData && images.length === 0 && sequenceFrames.length === 0 && assetLibrary.length === 0) return;
   pushBoundedState(history, snapshotState(), maxHistoryStates);
   redoStack = [];
+  compactHistoryForMemory();
 }
 
 function renderRestoredState() {
@@ -2578,6 +2634,7 @@ function setButtons() {
     : sourceRecordsForProcessing().length;
   const hasEditableTarget = sourceCount > 0 && (processingSource === "sequence" || hasImage);
   const hasValidSelection = (cropSelection?.width >= 2 && cropSelection?.height >= 2) || lassoSelection.length >= 3;
+  updateMemoryIndicator();
 
   removeBtn.disabled = operationBusy || !hasEditableTarget || !hasColors;
   if (cutoutCommitRow) cutoutCommitRow.hidden = !hasColors;
@@ -4018,57 +4075,32 @@ function scheduleAssetThumbnail(asset) {
   else window.setTimeout(start, 60);
 }
 
-function loadImageFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
-      reject(new Error("invalid image"));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const data = imageDataFromImage(img);
-        resolve({
-          name: file.name.replace(/\.[^.]+$/, "") || "image",
-          originalImageData: cloneImageData(data),
-          currentImageData: cloneImageData(data),
-          liveBaseImageData: null,
-          pickedColors: [],
-          history: [],
-          thumbnail: makeThumbnail(data),
-          selected: false,
-          pixelatedPreview: false
-        });
-      };
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+async function loadImageFile(file, options = {}) {
+  const loaded = await createImageSource(file, { maxSide: options.maxSide });
+  const data = loaded.imageData;
+  return {
+    name: file.name.replace(/\.[^.]+$/, "") || "image",
+    // The original library owns one editable proxy buffer. The compressed File is
+    // retained separately and decoded at full resolution only for export.
+    originalImageData: data,
+    currentImageData: data,
+    liveBaseImageData: null,
+    pickedColors: [],
+    history: [],
+    thumbnail: makeThumbnail(data),
+    selected: false,
+    pixelatedPreview: false,
+    fullResolutionSource: loaded.source
+  };
 }
 
-function loadImageDataFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
-      reject(new Error("invalid image"));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => resolve({
-        name: file.name.replace(/\.[^.]+$/, "") || "image",
-        imageData: imageDataFromImage(img)
-      });
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+async function loadImageDataFile(file, options = {}) {
+  const loaded = await createImageSource(file, { maxSide: options.maxSide });
+  return {
+    name: file.name.replace(/\.[^.]+$/, "") || "image",
+    imageData: loaded.imageData,
+    fullResolutionSource: loaded.source
+  };
 }
 
 function originalRecordFromItem(item) {
@@ -4578,11 +4610,26 @@ async function loadFiles(fileList) {
   }
 
   saveActiveImage();
-  setStatus("正在载入图片...");
+  const beforeImport = workspaceMemoryReport();
+  if (beforeImport.totalBytes >= workspaceMemoryPolicy.hardLimitBytes) {
+    compactHistoryForMemory();
+  }
+  const afterCompaction = workspaceMemoryReport();
+  if (afterCompaction.totalBytes >= workspaceMemoryPolicy.hardLimitBytes) {
+    setStatus("当前工作区内存已达安全上限。请先清理未使用的结果或序列帧，再继续导入。");
+    return;
+  }
+  const proxyMaxSide = chooseProxyMaxSide({
+    fileCount: files.length,
+    currentBytes: afterCompaction.totalBytes,
+    softLimitBytes: workspaceMemoryPolicy.softLimitBytes
+  });
+  setStatus(`正在载入图片并生成最长边 ${proxyMaxSide}px 的编辑代理…`);
   const loaded = [];
   for (const file of files) {
     try {
-      loaded.push(await loadImageFile(file));
+      loaded.push(await loadImageFile(file, { maxSide: proxyMaxSide }));
+      updateMemoryIndicator();
     } catch {
       setStatus(`有图片读取失败，已跳过：${file.name}`);
     }
@@ -4591,7 +4638,8 @@ async function loadFiles(fileList) {
   if (loaded.length === 0) return;
   images = images.concat(loaded);
   selectImage(images.length - loaded.length);
-  setStatus(`已载入 ${loaded.length} 张图片。可在列表中切换批量处理。`);
+  compactHistoryForMemory();
+  setStatus(`已载入 ${loaded.length} 张图片。原始分辨率已保留，画布使用 ${proxyMaxSide}px 以内的代理预览。`);
 }
 
 function rebuildAlphaPairImage() {
@@ -7382,7 +7430,8 @@ function sourceRecordsForProcessing() {
       target: item,
       name: item.name || "原始图片",
       imageData: item.originalImageData,
-      pixelatedPreview: Boolean(item.pixelatedPreview)
+      pixelatedPreview: Boolean(item.pixelatedPreview),
+      fullResolutionSource: item.fullResolutionSource || null
     }));
   }
   if (processingSource === "result") {
@@ -7393,7 +7442,8 @@ function sourceRecordsForProcessing() {
       target: asset,
       name: asset.name || "处理结果",
       imageData: asset.imageData,
-      pixelatedPreview: Boolean(asset.pixelatedPreview)
+      pixelatedPreview: Boolean(asset.pixelatedPreview),
+      fullResolutionSource: asset.fullResolutionSource || null
     }));
   }
   return [];
@@ -10737,14 +10787,6 @@ function updateExportSizeControls() {
   exportCustomSize.classList.toggle("active", exportSizePreset.value === "custom");
 }
 
-function imageDataCanvas(imageData) {
-  const work = document.createElement("canvas");
-  work.width = imageData.width;
-  work.height = imageData.height;
-  work.getContext("2d").putImageData(imageData, 0, 0);
-  return work;
-}
-
 function drawCanvasHighQuality(sourceCanvas, targetWidth, targetHeight) {
   let current = sourceCanvas;
   while (current.width * 0.5 > targetWidth && current.height * 0.5 > targetHeight) {
@@ -11018,19 +11060,44 @@ function currentExportItems() {
   if (processingSource === "sequence") {
     return chosenSequenceFrames().map(({ frame, index }) => ({
       name: `${frame.name || "frame"}-${String(index + 1).padStart(4, "0")}.png`,
-      imageData: frame.imageData
+      imageData: frame.imageData,
+      fullResolutionSource: frame.fullResolutionSource || null
     }));
   }
   if (processingSource === "result") {
     return selectedOrActiveAssets().filter((asset) => asset?.imageData).map((asset, index) => ({
       name: `${asset.name || `result-${index + 1}`}.png`,
-      imageData: asset.imageData
+      imageData: asset.imageData,
+      fullResolutionSource: asset.fullResolutionSource || null
     }));
   }
   return selectedOrActiveOriginals().map((item, index) => ({
     name: `${item.name || `image-${index + 1}`}`.replace(/\.(png|jpe?g|webp|gif|bmp)$/i, "") + ".png",
-    imageData: item.currentImageData || item.originalImageData
+    imageData: item.currentImageData || item.originalImageData,
+    fullResolutionSource: item.fullResolutionSource || null
   })).filter((item) => item.imageData);
+}
+
+function exportNeedsFullResolution(item) {
+  if (!item?.fullResolutionSource) return false;
+  const preset = exportSizePreset?.value || "original";
+  if (preset === "original") return true;
+  const requestedWidth = preset === "custom" ? Number(exportWidth?.value) : Number(preset);
+  const requestedHeight = preset === "custom" ? Number(exportHeight?.value) : Number(preset);
+  return requestedWidth > item.imageData.width || requestedHeight > item.imageData.height;
+}
+
+async function materializeExportItem(item) {
+  if (!exportNeedsFullResolution(item)) return item;
+  setStatus(`正在按需解码“${item.name}”的完整原图…`);
+  try {
+    const imageData = await materializeFullResolution(item.fullResolutionSource);
+    return imageData ? { ...item, imageData } : item;
+  } catch (error) {
+    console.error(error);
+    setStatus(`“${item.name}”完整原图解码失败，已改用代理图导出。`);
+    return item;
+  }
 }
 
 async function exportItemsAsZip(items, zipName = "images.zip") {
@@ -11038,7 +11105,7 @@ async function exportItemsAsZip(items, zipName = "images.zip") {
   const entries = [];
   const usedNames = new Set();
   for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
+    const item = await materializeExportItem(items[index]);
     entries.push({
       name: uniqueEntryName(safeExportName(withExportSizeSuffix(item.name, item.imageData)), usedNames),
       bytes: await pngBytesFor(item.imageData)
@@ -11058,7 +11125,7 @@ async function exportCurrentSelection() {
   const items = applyExportRename(sourceItems);
   const baseName = requestedExportBaseName();
   if (items.length === 1) {
-    const item = items[0];
+    const item = await materializeExportItem(items[0]);
     const name = withExportSizeSuffix(safeExportName(item.name), item.imageData);
     await downloadDataUrl(name, canvasDataUrlFor(item.imageData));
     finishExportSuccess(`已导出“${name}”。`);
@@ -11162,7 +11229,7 @@ async function exportPngItems(items, zipName, label) {
 
   const entries = [];
   for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
+    const item = await materializeExportItem(items[index]);
     const bytes = await pngBytesFor(item.imageData);
     entries.push({ name: safeExportName(withExportSizeSuffix(item.name, item.imageData)), bytes });
     if (index % 10 === 0) {
@@ -11192,7 +11259,8 @@ async function downloadAll() {
   await exportPngItems(
     assetLibrary.map((asset, index) => ({
       name: `${asset.name || `result-${index + 1}`}.png`,
-      imageData: asset.imageData
+      imageData: asset.imageData,
+      fullResolutionSource: asset.fullResolutionSource || null
     })),
     "processed-results.zip",
     "处理结果"
@@ -11232,14 +11300,20 @@ async function exportSequenceFrames() {
   if (selected.length === 1) {
     const { frame, index } = selected[0];
     const name = `${requestedExportBaseName()}-0001.png`;
-    await downloadDataUrl(withExportSizeSuffix(name, frame.imageData), canvasDataUrlFor(frame.imageData));
+    const item = await materializeExportItem({
+      name,
+      imageData: frame.imageData,
+      fullResolutionSource: frame.fullResolutionSource || null
+    });
+    await downloadDataUrl(withExportSizeSuffix(name, item.imageData), canvasDataUrlFor(item.imageData));
     finishExportSuccess("当前序列帧 PNG 已保存。");
     return;
   }
   await exportPngItems(
     selected.map(({ frame }, exportIndex) => ({
       name: `${requestedExportBaseName()}-${String(exportIndex + 1).padStart(4, "0")}.png`,
-      imageData: frame.imageData
+      imageData: frame.imageData,
+      fullResolutionSource: frame.fullResolutionSource || null
     })),
     `${requestedExportBaseName()}.zip`,
     "序列帧"
@@ -11384,11 +11458,16 @@ async function exportSequenceZip() {
   const entries = [];
   for (let index = 0; index < selected.length; index += 1) {
     const { frame, index: originalIndex } = selected[index];
+    const exportItem = await materializeExportItem({
+      name: frame.name || "frame",
+      imageData: frame.imageData,
+      fullResolutionSource: frame.fullResolutionSource || null
+    });
     const number = String(originalIndex + 1).padStart(4, "0");
     const baseName = (frame.name || "frame").replace(/[\\/:*?"<>|]/g, "_");
     entries.push({
-      name: withExportSizeSuffix(`${baseName}-${number}.png`, frame.imageData),
-      bytes: await pngBytesFor(frame.imageData)
+      name: withExportSizeSuffix(`${baseName}-${number}.png`, exportItem.imageData),
+      bytes: await pngBytesFor(exportItem.imageData)
     });
     if (index % 10 === 0) await yieldToBrowser(0);
   }
@@ -11412,7 +11491,8 @@ function frameFromImageItem(item, fallbackName) {
     selected: false,
     order: 0,
     pixelatedPreview: Boolean(item.pixelatedPreview),
-    delayMs: normalizedFrameDelayMs(item)
+    delayMs: normalizedFrameDelayMs(item),
+    fullResolutionSource: placement ? null : (item.fullResolutionSource || null)
   };
 }
 
@@ -11439,8 +11519,18 @@ async function importSequenceFiles(fileList) {
   let added = 0;
   for (const file of files) {
     try {
-      const loaded = await loadImageDataFile(file);
-      sequenceFrames.push(frameFromImageItem({ name: loaded.name, imageData: loaded.imageData }, `frame-${sequenceFrames.length + 1}`));
+      const report = workspaceMemoryReport();
+      const proxyMaxSide = chooseProxyMaxSide({
+        fileCount: files.length,
+        currentBytes: report.totalBytes,
+        softLimitBytes: workspaceMemoryPolicy.softLimitBytes
+      });
+      const loaded = await loadImageDataFile(file, { maxSide: proxyMaxSide });
+      sequenceFrames.push(frameFromImageItem({
+        name: loaded.name,
+        imageData: loaded.imageData,
+        fullResolutionSource: loaded.fullResolutionSource
+      }, `frame-${sequenceFrames.length + 1}`));
       added += 1;
     } catch (error) {
       console.error(error);

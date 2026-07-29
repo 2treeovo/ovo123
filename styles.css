@@ -1026,12 +1026,6 @@ canvas.ready {
 
 
 
-@media (max-width: 1100px) {
-
-
-
-}
-
 /* ===== 2026 UI cleanup: focused workspace and categorized sidebar ===== */
 :root {
   --app-bg: #e9eeec;

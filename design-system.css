@@ -1,0 +1,269 @@
+/*
+ * Professional component layer
+ * This file is the single authoritative visual contract for interactive UI.
+ * Layout remains in styles.css; legacy visual-refresh rules are normalized here.
+ */
+:root {
+  color-scheme: dark;
+  --ds-bg: #07111a;
+  --ds-surface-1: #0c1b28;
+  --ds-surface-2: #102534;
+  --ds-surface-3: #173246;
+  --ds-border: #25485c;
+  --ds-border-strong: #37677d;
+  --ds-text: #e8f4f7;
+  --ds-text-muted: #8fa9b6;
+  --ds-text-faint: #66808e;
+  --ds-accent: #28c9c3;
+  --ds-accent-strong: #54e6d9;
+  --ds-accent-soft: rgba(40, 201, 195, 0.13);
+  --ds-warning: #ffad42;
+  --ds-danger: #ff6677;
+  --ds-focus: 0 0 0 3px rgba(40, 201, 195, 0.24);
+  --ds-shadow: 0 16px 48px rgba(0, 0, 0, 0.34);
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 18px;
+  --ds-control-height: 38px;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+body {
+  background: var(--ds-bg);
+  color: var(--ds-text);
+}
+
+button,
+.button-like,
+input,
+select,
+textarea {
+  border-radius: var(--ds-radius-sm);
+}
+
+button,
+.button-like {
+  min-height: var(--ds-control-height);
+  border: 1px solid var(--ds-border);
+  background: linear-gradient(180deg, #173247, #102536);
+  color: var(--ds-text);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+button:hover:not(:disabled),
+.button-like:hover {
+  border-color: var(--ds-border-strong);
+  background: linear-gradient(180deg, #1d4055, #143044);
+  color: #fff;
+}
+
+button:active:not(:disabled),
+.button-like:active {
+  transform: translateY(1px);
+}
+
+button.primary,
+.primary-choice,
+#downloadBtn {
+  border-color: rgba(84, 230, 217, 0.65);
+  background: linear-gradient(135deg, #0d8e91, #17aaa4);
+  color: #f4ffff;
+}
+
+button:disabled,
+.button-like[aria-disabled="true"] {
+  border-color: #1b3443;
+  background: #0d202d;
+  color: #58717e;
+  opacity: 0.74;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+button:focus-visible,
+.button-like:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus);
+  border-color: var(--ds-accent);
+}
+
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+select,
+textarea {
+  min-height: var(--ds-control-height);
+  border: 1px solid var(--ds-border);
+  background: #091925;
+  color: var(--ds-text);
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #0b1c28;
+  color: var(--ds-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ds-text-faint);
+}
+
+input[type="range"] {
+  accent-color: var(--ds-accent);
+}
+
+.panel > section,
+.asset-panel,
+.batch-panel,
+.sequence-panel,
+.sequence-library-panel,
+.drawing-panel,
+.controls,
+.export-section,
+.app-modal > section,
+.image-preview-panel,
+.frame-picker > section {
+  border-color: var(--ds-border);
+  background: linear-gradient(180deg, rgba(16, 37, 52, 0.97), rgba(10, 27, 39, 0.97));
+  box-shadow: none;
+}
+
+.label-row,
+.image-preview-head,
+.export-dialog-head,
+.frame-picker-head {
+  border-color: var(--ds-border);
+  background: transparent;
+  color: var(--ds-text);
+}
+
+.label-row span,
+.label-row strong,
+h1,
+h2,
+h3 {
+  color: var(--ds-text);
+}
+
+.label-row small,
+.tool-hint,
+.brand p,
+.status {
+  color: var(--ds-text-muted);
+}
+
+.library-actions,
+.sequence-actions,
+.drawing-panel-actions,
+.export-actions {
+  background: transparent;
+}
+
+.image-card,
+.frame-card,
+.asset-card,
+.sequence-player-frame {
+  border-color: var(--ds-border);
+  background: #091a26;
+}
+
+.image-card:hover,
+.frame-card:hover,
+.asset-card:hover,
+.sequence-player-frame:hover {
+  border-color: var(--ds-border-strong);
+}
+
+.image-card.active,
+.frame-card.active,
+.asset-card.active,
+.sequence-player-frame.active,
+.processing-target-bar button.active {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-soft);
+  box-shadow: 0 0 0 1px rgba(40, 201, 195, 0.2);
+}
+
+.app-modal,
+.image-preview-modal,
+.frame-picker {
+  background: rgba(2, 9, 14, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.app-modal > section,
+.image-preview-panel,
+.frame-picker > section {
+  box-shadow: var(--ds-shadow);
+}
+
+.memory-usage-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  background: rgba(9, 25, 37, 0.84);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.memory-usage-indicator::before {
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  content: "";
+  box-shadow: 0 0 0 3px rgba(40, 201, 195, 0.12);
+}
+
+.memory-usage-indicator[data-level="warning"] {
+  border-color: rgba(255, 173, 66, 0.55);
+  color: #ffd49b;
+}
+
+.memory-usage-indicator[data-level="warning"]::before,
+.memory-usage-indicator[data-level="critical"]::before {
+  background: var(--ds-warning);
+  box-shadow: 0 0 0 3px rgba(255, 173, 66, 0.13);
+}
+
+.memory-usage-indicator[data-level="critical"] {
+  border-color: rgba(255, 102, 119, 0.65);
+  color: #ffb4bc;
+}
+
+.memory-usage-indicator[data-level="critical"]::before {
+  background: var(--ds-danger);
+}
+
+@media (max-width: 980px) {
+  .memory-usage-indicator {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .button-like {
+    transition: none;
+  }
+}

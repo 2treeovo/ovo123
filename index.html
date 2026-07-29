@@ -11,8 +11,9 @@
 <meta content="website" property="og:type"/>
 <meta content="https://2treeovo.github.io/ovo123/og.png" property="og:image"/>
 <meta content="summary_large_image" name="twitter:card"/>
-<link href="styles.css?v=single-frame-delay-31" rel="stylesheet"/>
-<link href="visual-refresh.css?v=studio-refresh-05" rel="stylesheet"/></head>
+<link href="styles.css?v=professional-core-35" rel="stylesheet"/>
+<link href="visual-refresh.css?v=studio-refresh-05" rel="stylesheet"/>
+<link href="design-system.css?v=professional-ui-01" rel="stylesheet"/></head>
 <body>
 <main class="app">
 <header aria-label="全局工具栏" class="app-topbar">
@@ -23,6 +24,7 @@
 <small>抠图 · 绘制 · 编辑 · 序列帧</small>
 </div>
 <section aria-label="处理对象" class="processing-target-bar"><strong>处理对象</strong><button class="active" data-processing-source="original" type="button">原始图片库</button><button data-processing-source="result" type="button">处理结果库</button><button data-processing-source="sequence" type="button">当前序列帧</button></section><div class="topbar-actions">
+<output aria-live="polite" class="memory-usage-indicator" data-level="normal" id="memoryUsageIndicator">内存 0 MB</output>
 <button class="primary" id="openImportDialogBtn" type="button">导入</button>
 <button id="openExportDialogBtn" type="button">导出</button>
 </div>
@@ -420,4 +422,4 @@
 </section>
 </div><div aria-busy="true" aria-live="assertive" class="operation-busy" hidden="" id="operationBusyOverlay">
 <div class="operation-busy-card"><span aria-hidden="true" class="busy-spinner"></span><strong id="operationBusyText">正在处理…</strong></div>
-</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=sequence-player-34"></script><script src="ui-shell.js?v=single-frame-delay-31"></script></body></html>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-35" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>
