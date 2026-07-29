@@ -9,6 +9,7 @@ import {
   memoryPolicy,
   memoryPressureLevel
 } from "./modules/core/memory-budget.js";
+import { shouldPreserveOpaqueFullFrame } from "./modules/core/pixel-background.js";
 
 const input = document.querySelector("#imageInput");
 const videoInput = document.querySelector("#videoInput");
@@ -1606,7 +1607,21 @@ function buildContourSubjectMask(imageData, options) {
     }
   }
 
-  const labeled = cleanMaskComponents(mask, width, height);
+  let labeled = cleanMaskComponents(mask, width, height);
+  if (mode === "edge-background") {
+    let subjectPixels = 0;
+    for (let pixel = 0; pixel < mask.length; pixel += 1) subjectPixels += mask[pixel];
+    if (shouldPreserveOpaqueFullFrame({
+      subjectPixels,
+      totalPixels: total,
+      backgroundModels
+    })) {
+      mask.fill(1);
+      mode = "full-texture";
+      backgroundModels = [];
+      labeled = labelMaskComponents(mask, width, height);
+    }
+  }
   return { mask, mode, backgroundModels, labels: labeled.labels, components: labeled.components };
 }
 
@@ -2292,8 +2307,13 @@ function requantizeOpaqueImageData(imageData, paletteSize) {
 function contourPixelizeImageData(imageData, options = {}) {
   const normalized = normalizeContourPixelOptions(options);
   const subject = buildContourSubjectMask(imageData, normalized);
+  const subjectOptions = {
+    ...normalized,
+    backgroundModels: subject.backgroundModels,
+    darkOutline: subject.mode === "full-texture" ? false : normalized.darkOutline
+  };
   if (!normalized.splitSubjects || subject.components.length < 2) {
-    return contourPixelizeMasked(imageData, subject.mask, { ...normalized, backgroundModels: subject.backgroundModels });
+    return contourPixelizeMasked(imageData, subject.mask, subjectOptions);
   }
 
   const largest = subject.components.reduce((best, item) => Math.max(best, item.area), 0);
@@ -2301,7 +2321,7 @@ function contourPixelizeImageData(imageData, options = {}) {
     .filter((component) => component.area >= Math.max(8, largest * 0.04))
     .sort((left, right) => left.minX - right.minX || left.minY - right.minY)
     .slice(0, 12);
-  if (majorComponents.length < 2) return contourPixelizeMasked(imageData, subject.mask, { ...normalized, backgroundModels: subject.backgroundModels });
+  if (majorComponents.length < 2) return contourPixelizeMasked(imageData, subject.mask, subjectOptions);
 
   const gap = Math.max(1, Math.round(normalized.width * 0.06));
   const output = new ImageData(majorComponents.length * normalized.width + (majorComponents.length - 1) * gap, normalized.height);
@@ -2311,7 +2331,7 @@ function contourPixelizeImageData(imageData, options = {}) {
     for (let pixel = 0; pixel < componentMask.length; pixel += 1) {
       if (subject.labels[pixel] === component.label) componentMask[pixel] = 1;
     }
-    const converted = contourPixelizeMasked(imageData, componentMask, { ...normalized, backgroundModels: subject.backgroundModels });
+    const converted = contourPixelizeMasked(imageData, componentMask, subjectOptions);
     copyImageDataInto(output, converted, componentIndex * (normalized.width + gap), 0);
   }
   return requantizeOpaqueImageData(output, normalized.paletteSize);
