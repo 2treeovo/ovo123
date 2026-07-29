@@ -1817,3 +1817,147 @@ output {
     flex-basis: 64px;
   }
 }
+
+/* Export dialog: keep every form surface and native option list readable in
+   the dark studio palette. */
+#exportDialog .export-dialog-panel {
+  color-scheme: dark;
+  border-color: rgba(83, 151, 168, 0.34);
+  background:
+    radial-gradient(circle at 14% -10%, rgba(42, 204, 188, 0.08), transparent 34%),
+    linear-gradient(180deg, #132b3a, #081b28);
+}
+
+#exportDialogContent .export-panel {
+  gap: 14px;
+}
+
+#exportDialogContent .export-location,
+#exportDialogContent .export-name-control,
+#exportDialogContent .export-size-controls,
+#exportDialogContent .export-actions {
+  color: #dbe9ed;
+  border-color: rgba(100, 157, 174, 0.24);
+  background:
+    linear-gradient(180deg, rgba(15, 40, 54, 0.96), rgba(10, 30, 43, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 8px 22px rgba(0, 5, 10, 0.12);
+}
+
+#exportDialogContent .export-location output {
+  color: #bed1d8;
+  border-color: rgba(108, 164, 180, 0.28);
+  background: #091d2a;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 5, 10, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+#exportDialogContent .export-name-control > span,
+#exportDialogContent .export-size-controls > label:first-child > span {
+  color: #a9bec7;
+}
+
+#exportDialogContent .export-name-control small {
+  color: #8199a4;
+  background: transparent;
+}
+
+#exportDialogContent .export-name-control input,
+#exportDialogContent .export-size-controls select,
+#exportDialogContent .export-size-controls input[type="number"] {
+  color: #eef7f8;
+  border-color: rgba(89, 193, 190, 0.34);
+  background: #071a26;
+  box-shadow:
+    inset 0 2px 6px rgba(0, 4, 9, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.012);
+}
+
+#exportDialogContent .export-name-control input:focus,
+#exportDialogContent .export-size-controls select:focus,
+#exportDialogContent .export-size-controls input[type="number"]:focus {
+  border-color: #32d5c2;
+  outline: 2px solid rgba(50, 213, 194, 0.2);
+  outline-offset: 1px;
+}
+
+#exportSizePreset {
+  color-scheme: dark;
+  accent-color: #32d5c2;
+}
+
+#exportSizePreset option {
+  color: #e7f2f4;
+  background-color: #0b2230;
+}
+
+#exportSizePreset option:checked {
+  color: #04221f;
+  background-color: #39d7c5;
+}
+
+#exportDialogContent .export-size-controls .compact-toggle {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 11px;
+  color: #b9cbd1;
+  border: 1px solid rgba(106, 159, 175, 0.2);
+  border-radius: 9px;
+  background: rgba(9, 29, 42, 0.72);
+}
+
+#exportDialogContent .export-size-controls .compact-toggle:hover {
+  color: #edf8f9;
+  border-color: rgba(50, 213, 194, 0.4);
+  background: rgba(15, 47, 58, 0.82);
+}
+
+#exportDialogContent .export-size-controls .compact-toggle input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #31d4c1;
+}
+
+#exportDialogContent .export-size-controls .compact-toggle span {
+  color: inherit;
+  font-weight: 600;
+}
+
+#exportDialogContent .export-custom-size {
+  color: #91a8b2;
+}
+
+#exportDialogContent .export-action-hint {
+  color: #a7bdc5;
+  border: 1px solid rgba(79, 145, 160, 0.24);
+  border-left: 3px solid #f6aa42;
+  background:
+    linear-gradient(90deg, rgba(246, 170, 66, 0.08), rgba(8, 28, 41, 0.92) 28%);
+}
+
+#exportDialogContent .export-actions button {
+  color: #d7e5e9;
+  border-color: rgba(108, 160, 176, 0.25);
+  background: linear-gradient(180deg, #173447, #102737);
+}
+
+#exportDialogContent .export-actions button:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: rgba(49, 213, 193, 0.56);
+  background: linear-gradient(180deg, #1d4453, #123441);
+}
+
+#exportDialogContent .export-actions button:disabled {
+  color: #5f7782;
+  border-color: rgba(90, 133, 148, 0.14);
+  background: #0b2331;
+}
