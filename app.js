@@ -9,7 +9,12 @@ import {
   memoryPolicy,
   memoryPressureLevel
 } from "./modules/core/memory-budget.js";
-import { shouldPreserveOpaqueFullFrame } from "./modules/core/pixel-background.js";
+import {
+  measureOpaqueEdgeTexture,
+  opaquePixelRatio,
+  shouldPreserveOpaqueFullFrame,
+  shouldRetrySparsePixelation
+} from "./modules/core/pixel-background.js";
 
 const input = document.querySelector("#imageInput");
 const videoInput = document.querySelector("#videoInput");
@@ -1545,6 +1550,7 @@ function buildContourSubjectMask(imageData, options) {
 
   let mode = "alpha";
   let backgroundModels = [];
+  let edgeTexture = { meanDelta: 0, activeFraction: 0, samples: 0 };
   if (transparentCount >= Math.max(4, Math.round(total * 0.001))) {
     const alphaThreshold = Math.max(8, Math.round(34 - options.contourStrength * 0.18));
     for (let pixel = 0; pixel < total; pixel += 1) {
@@ -1552,6 +1558,7 @@ function buildContourSubjectMask(imageData, options) {
     }
   } else {
     mode = "edge-background";
+    edgeTexture = measureOpaqueEdgeTexture(imageData);
     backgroundModels = borderColorModels(imageData);
     const background = new Uint8Array(total);
     const queue = new Int32Array(total);
@@ -1615,7 +1622,8 @@ function buildContourSubjectMask(imageData, options) {
     if (shouldPreserveOpaqueFullFrame({
       subjectPixels,
       totalPixels: total,
-      backgroundModels
+      backgroundModels,
+      edgeTexture
     })) {
       mask.fill(1);
       mode = "full-texture";
@@ -1623,7 +1631,7 @@ function buildContourSubjectMask(imageData, options) {
       labeled = labelMaskComponents(mask, width, height);
     }
   }
-  return { mask, mode, backgroundModels, labels: labeled.labels, components: labeled.components };
+  return { mask, mode, backgroundModels, edgeTexture, labels: labeled.labels, components: labeled.components };
 }
 
 function maskPixelBounds(mask, width, height) {
@@ -2313,8 +2321,29 @@ function contourPixelizeImageData(imageData, options = {}) {
     backgroundModels: subject.backgroundModels,
     darkOutline: subject.mode === "full-texture" ? false : normalized.darkOutline
   };
+  const retrySparseResult = (converted) => {
+    if (!shouldRetrySparsePixelation({
+      maskMode: subject.mode,
+      sourceOpaqueRatio: opaquePixelRatio(imageData),
+      outputOpaqueRatio: opaquePixelRatio(converted),
+      edgeTexture: subject.edgeTexture
+    })) {
+      return converted;
+    }
+    const fullMask = new Uint8Array(imageData.width * imageData.height);
+    for (let pixel = 0; pixel < fullMask.length; pixel += 1) {
+      if (imageData.data[pixel * 4 + 3] > 16) fullMask[pixel] = 1;
+    }
+    return contourPixelizeMasked(imageData, fullMask, {
+      ...normalized,
+      splitSubjects: false,
+      cleanInteriorBackground: false,
+      darkOutline: false,
+      backgroundModels: []
+    });
+  };
   if (!normalized.splitSubjects || subject.components.length < 2) {
-    return contourPixelizeMasked(imageData, subject.mask, subjectOptions);
+    return retrySparseResult(contourPixelizeMasked(imageData, subject.mask, subjectOptions));
   }
 
   const largest = subject.components.reduce((best, item) => Math.max(best, item.area), 0);
@@ -2322,7 +2351,9 @@ function contourPixelizeImageData(imageData, options = {}) {
     .filter((component) => component.area >= Math.max(8, largest * 0.04))
     .sort((left, right) => left.minX - right.minX || left.minY - right.minY)
     .slice(0, 12);
-  if (majorComponents.length < 2) return contourPixelizeMasked(imageData, subject.mask, subjectOptions);
+  if (majorComponents.length < 2) {
+    return retrySparseResult(contourPixelizeMasked(imageData, subject.mask, subjectOptions));
+  }
 
   const gap = Math.max(1, Math.round(normalized.width * 0.06));
   const output = new ImageData(majorComponents.length * normalized.width + (majorComponents.length - 1) * gap, normalized.height);
@@ -2335,7 +2366,7 @@ function contourPixelizeImageData(imageData, options = {}) {
     const converted = contourPixelizeMasked(imageData, componentMask, subjectOptions);
     copyImageDataInto(output, converted, componentIndex * (normalized.width + gap), 0);
   }
-  return requantizeOpaqueImageData(output, normalized.paletteSize);
+  return retrySparseResult(requantizeOpaqueImageData(output, normalized.paletteSize));
 }
 
 function contourPixelOpaqueMask(imageData, alphaThreshold = 128) {
