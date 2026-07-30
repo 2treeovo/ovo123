@@ -77,7 +77,10 @@ export function shouldRetrySparsePixelation({
   edgeTexture = {}
 } = {}) {
   if (maskMode !== "edge-background") return false;
-  if (Number(sourceOpaqueRatio) < 0.98 || Number(outputOpaqueRatio) >= 0.025) return false;
+  if (Number(sourceOpaqueRatio) < 0.98) return false;
+  const sparseRatio = Math.max(0, Number(outputOpaqueRatio) || 0);
+  if (sparseRatio < 0.04) return true;
+  if (sparseRatio >= 0.12) return false;
   const meanDelta = Math.max(0, Number(edgeTexture.meanDelta) || 0);
   const activeFraction = Math.max(0, Number(edgeTexture.activeFraction) || 0);
   return meanDelta >= 1.2 && activeFraction >= 0.08;
