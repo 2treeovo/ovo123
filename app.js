@@ -13,8 +13,9 @@ import {
   measureOpaqueEdgeTexture,
   opaquePixelRatio,
   shouldPreserveOpaqueFullFrame,
-  shouldRetrySparsePixelation
-} from "./modules/core/pixel-background.js";
+  shouldRetrySparsePixelation,
+  shouldUseOpaqueFullFrame
+} from "./modules/core/pixel-background.js?v=professional-core-44";
 
 const input = document.querySelector("#imageInput");
 const videoInput = document.querySelector("#videoInput");
@@ -805,7 +806,7 @@ function installContourPixelPanel() {
       <div class="contour-pixel-checks full">
         <label class="contour-pixel-check" title="适用于三视图、序列人物或一张图中存在多个互不相连主体的情况。"><input id="contourPixelSplitSubjects" type="checkbox"> 多个主体分别处理</label>
       </div>
-      <p class="contour-pixel-note">其余参数已自动使用推荐值：保留五官与关键线条，清理内部背景、孤立像素和外轮廓凸起色块，自适应整理外轮廓并对齐脚底。开启多主体处理后，目标尺寸表示每个主体的尺寸。</p>
+      <p class="contour-pixel-note">不透明图片会保留完整画面进行像素化；需要去除背景时，请先使用抠图功能。透明素材仍会按主体轮廓整理，并自动清理孤立像素和外轮廓凸起色块。</p>
       <button id="contourPixelizeBtn" type="button" class="contour-pixel-apply">转换为像素风</button>
     </div>
   `;
@@ -1378,6 +1379,7 @@ const contourPixelDefaults = Object.freeze({
   backgroundTolerance: 42,
   samplingMode: "dominant",
   cleanInteriorBackground: true,
+  preserveOpaqueCanvas: true,
   darkOutline: true,
   bottomAnchor: true
 });
@@ -1401,6 +1403,7 @@ function currentContourPixelOptions() {
     backgroundTolerance: contourPixelDefaults.backgroundTolerance,
     samplingMode: contourPixelDefaults.samplingMode,
     cleanInteriorBackground: contourPixelDefaults.cleanInteriorBackground,
+    preserveOpaqueCanvas: contourPixelDefaults.preserveOpaqueCanvas,
     splitSubjects: contourPixelSplitSubjects?.checked === true,
     darkOutline: contourPixelDefaults.darkOutline,
     bottomAnchor: contourPixelDefaults.bottomAnchor
@@ -1555,6 +1558,15 @@ function buildContourSubjectMask(imageData, options) {
     const alphaThreshold = Math.max(8, Math.round(34 - options.contourStrength * 0.18));
     for (let pixel = 0; pixel < total; pixel += 1) {
       mask[pixel] = data[pixel * 4 + 3] > alphaThreshold ? 1 : 0;
+    }
+  } else if (shouldUseOpaqueFullFrame({
+    transparentPixels: transparentCount,
+    totalPixels: total,
+    preserveOpaqueCanvas: options.preserveOpaqueCanvas
+  })) {
+    mode = "full-opaque";
+    for (let pixel = 0; pixel < total; pixel += 1) {
+      if (data[pixel * 4 + 3] > 16) mask[pixel] = 1;
     }
   } else {
     mode = "edge-background";
@@ -2114,6 +2126,7 @@ function normalizeContourPixelOptions(options = {}) {
     backgroundTolerance: Math.max(1, Math.min(160, Number(options.backgroundTolerance) || 42)),
     samplingMode: ["adaptive", "dominant", "median", "mean"].includes(options.samplingMode) ? options.samplingMode : "dominant",
     cleanInteriorBackground: options.cleanInteriorBackground !== false,
+    preserveOpaqueCanvas: options.preserveOpaqueCanvas !== false,
     splitSubjects: options.splitSubjects === true,
     darkOutline: options.darkOutline !== false,
     bottomAnchor: options.bottomAnchor !== false
@@ -2319,7 +2332,7 @@ function contourPixelizeImageData(imageData, options = {}) {
   const subjectOptions = {
     ...normalized,
     backgroundModels: subject.backgroundModels,
-    darkOutline: subject.mode === "full-texture" ? false : normalized.darkOutline
+    darkOutline: subject.mode.startsWith("full") ? false : normalized.darkOutline
   };
   const retrySparseResult = (converted) => {
     if (!shouldRetrySparsePixelation({

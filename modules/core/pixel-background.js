@@ -1,3 +1,14 @@
+export function shouldUseOpaqueFullFrame({
+  transparentPixels,
+  totalPixels,
+  preserveOpaqueCanvas = true
+} = {}) {
+  if (!preserveOpaqueCanvas) return false;
+  const total = Math.max(1, Number(totalPixels) || 0);
+  const transparent = Math.max(0, Number(transparentPixels) || 0);
+  return transparent < Math.max(4, Math.round(total * 0.001));
+}
+
 export function shouldPreserveOpaqueFullFrame({
   subjectPixels,
   totalPixels,
