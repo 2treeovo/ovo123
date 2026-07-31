@@ -1380,7 +1380,7 @@ const contourPixelDefaults = Object.freeze({
   samplingMode: "dominant",
   cleanInteriorBackground: true,
   preserveOpaqueCanvas: true,
-  darkOutline: true,
+  darkOutline: false,
   bottomAnchor: true
 });
 
@@ -2128,7 +2128,7 @@ function normalizeContourPixelOptions(options = {}) {
     cleanInteriorBackground: options.cleanInteriorBackground !== false,
     preserveOpaqueCanvas: options.preserveOpaqueCanvas !== false,
     splitSubjects: options.splitSubjects === true,
-    darkOutline: options.darkOutline !== false,
+    darkOutline: options.darkOutline === true,
     bottomAnchor: options.bottomAnchor !== false
   };
 }
