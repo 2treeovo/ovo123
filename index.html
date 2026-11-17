@@ -11,7 +11,7 @@
 <meta content="website" property="og:type"/>
 <meta content="https://2treeovo.github.io/ovo123/og.png" property="og:image"/>
 <meta content="summary_large_image" name="twitter:card"/>
-<link href="styles.css?v=professional-core-35" rel="stylesheet"/>
+<link href="styles.css?v=professional-core-47" rel="stylesheet"/>
 <link href="visual-refresh.css?v=studio-refresh-05" rel="stylesheet"/>
 <link href="design-system.css?v=professional-ui-02" rel="stylesheet"/></head>
 <body>
@@ -266,6 +266,7 @@
 <div aria-label="显示模式" class="mode-tabs" role="tablist">
 <button class="active" id="resultTab" type="button">结果</button>
 <button id="originalTab" type="button">原图</button>
+<button aria-pressed="false" disabled="" id="compareTab" type="button">滑动对比</button>
 </div>
 <div aria-label="常用画布工具" class="canvas-main-tools" id="canvasMainTools" role="group">
 <button id="pickModeBtn" type="button">取背景色</button>
@@ -299,6 +300,11 @@
 <div class="stage" id="stage">
 <div class="canvas-scene" id="canvasScene">
 <canvas aria-label="图片画布" id="canvas"></canvas>
+<canvas aria-hidden="true" id="compareCanvas"></canvas>
+<span class="compare-label compare-label-original" hidden="" id="compareOriginalLabel">原图</span>
+<span class="compare-label compare-label-result" hidden="" id="compareResultLabel">结果</span>
+<div aria-hidden="true" class="compare-divider" hidden="" id="compareDivider"><span>↔</span></div>
+<input aria-label="拖动查看原图与结果" aria-valuetext="原图 50%，结果 50%" hidden="" id="compareRange" max="100" min="0" step="1" type="range" value="50"/>
 <canvas aria-label="选区画布" id="selectionCanvas"></canvas>
 <div class="crop-box" hidden="" id="cropBox"></div>
 </div>
@@ -447,4 +453,4 @@
 <section aria-labelledby="memoryLimitDialogTitle" class="app-dialog memory-limit-panel">
 <div class="memory-limit-icon" aria-hidden="true">!</div><div><h2 id="memoryLimitDialogTitle">工作区内存已满</h2><p id="memoryLimitMessage">请先清理未使用的处理结果或序列帧，再继续导入或处理图片。</p></div><button class="primary" id="closeMemoryLimitDialogBtn" type="button">我知道了</button>
 </section>
-</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-46" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>
+</div><div class="image-preview-modal" hidden="" id="imagePreviewModal"><section aria-label="图片放大预览" class="image-preview-panel"><div class="image-preview-head"><h2 id="imagePreviewTitle">图片预览</h2><button id="closeImagePreviewBtn" type="button">关闭</button></div><img alt="图片放大预览" id="imagePreviewImg"/></section></div><script onerror="document.documentElement.classList.add('ocr-unavailable')" src="vendor/tesseract.min.js"></script><script src="app.js?v=professional-core-47" type="module"></script><script src="ui-shell.js?v=professional-core-35" type="module"></script></body></html>
