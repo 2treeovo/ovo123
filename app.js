@@ -12,10 +12,11 @@ import {
 import {
   measureOpaqueEdgeTexture,
   opaquePixelRatio,
+  repairDarkContourFringeCells,
   shouldPreserveOpaqueFullFrame,
   shouldRetrySparsePixelation,
   shouldUseOpaqueFullFrame
-} from "./modules/core/pixel-background.js?v=professional-core-44";
+} from "./modules/core/pixel-background.js?v=professional-core-46";
 
 const input = document.querySelector("#imageInput");
 const videoInput = document.querySelector("#videoInput");
@@ -2185,7 +2186,7 @@ function contourPixelizeMasked(imageData, subjectMask, options) {
   const drawHeight = geometry.drawHeight;
   const offsetX = Math.trunc(geometry.offsetX);
   const offsetY = Math.trunc(geometry.offsetY);
-  const cells = new Array(targetWidth * targetHeight).fill(null);
+  let cells = new Array(targetWidth * targetHeight).fill(null);
   const coverageThreshold = Math.max(0.12, Math.min(0.58, 0.56 - options.contourStrength * 0.0044));
 
   for (let py = 0; py < drawHeight; py += 1) {
@@ -2221,6 +2222,9 @@ function contourPixelizeMasked(imageData, subjectMask, options) {
   cleanupContourPixelCells(cells, targetWidth, targetHeight, options.clusterCleanup);
   if ((options.backgroundModels || []).length > 0 && options.cleanInteriorBackground) {
     repairContourCellColorSpill(cells, targetWidth, targetHeight);
+  }
+  if (!options.darkOutline) {
+    cells = repairDarkContourFringeCells(cells, targetWidth, targetHeight);
   }
   const opaqueCells = cells.filter(Boolean);
   const palette = medianCutPalette(opaqueCells, options.paletteSize);

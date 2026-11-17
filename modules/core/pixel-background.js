@@ -96,3 +96,85 @@ export function shouldRetrySparsePixelation({
   const activeFraction = Math.max(0, Number(edgeTexture.activeFraction) || 0);
   return meanDelta >= 1.2 && activeFraction >= 0.08;
 }
+
+function contourCellLuma(color) {
+  if (!color) return 0;
+  return Number(color.r || 0) * 0.299 + Number(color.g || 0) * 0.587 + Number(color.b || 0) * 0.114;
+}
+
+export function repairDarkContourFringeCells(cells, width, height, options = {}) {
+  const w = Math.max(0, Math.floor(Number(width) || 0));
+  const h = Math.max(0, Math.floor(Number(height) || 0));
+  if (!Array.isArray(cells) || w <= 0 || h <= 0 || cells.length < w * h) return cells;
+
+  const source = cells.slice();
+  const repaired = cells.slice();
+  const minLumaGap = Math.max(8, Number(options.minLumaGap) || 24);
+  const maxLumaRatio = Math.max(0.25, Math.min(0.9, Number(options.maxLumaRatio) || 0.68));
+  const searchRadius = Math.max(1, Math.min(3, Math.round(Number(options.searchRadius) || 2)));
+  const neighborCount = (x, y) => {
+    let count = 0;
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        if (ox === 0 && oy === 0) continue;
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (source[ny * w + nx]) count += 1;
+      }
+    }
+    return count;
+  };
+  const medianChannel = (colors, channel) => {
+    const values = colors.map((color) => Number(color[channel]) || 0).sort((left, right) => left - right);
+    return Math.round(values[Math.floor(values.length / 2)]);
+  };
+  const supportMap = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (source[y * w + x]) supportMap[y * w + x] = neighborCount(x, y);
+    }
+  }
+
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const index = y * w + x;
+      const current = source[index];
+      if (!current) continue;
+      const support = supportMap[index];
+      if (support >= 8) continue;
+      const currentLuma = contourCellLuma(current);
+      const requiredSupport = Math.min(5, support + 1);
+      let candidates = [];
+      for (let radius = 1; radius <= searchRadius && candidates.length === 0; radius += 1) {
+        for (let oy = -radius; oy <= radius; oy += 1) {
+          for (let ox = -radius; ox <= radius; ox += 1) {
+            if (Math.max(Math.abs(ox), Math.abs(oy)) !== radius) continue;
+            const nx = x + ox;
+            const ny = y + oy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const candidate = source[ny * w + nx];
+            if (!candidate || supportMap[ny * w + nx] < requiredSupport) continue;
+            if (contourCellLuma(candidate) - currentLuma < minLumaGap) continue;
+            candidates.push(candidate);
+          }
+        }
+      }
+      if (candidates.length === 0) continue;
+      const replacement = {
+        r: medianChannel(candidates, "r"),
+        g: medianChannel(candidates, "g"),
+        b: medianChannel(candidates, "b")
+      };
+      const replacementLuma = contourCellLuma(replacement);
+      if (replacementLuma - currentLuma < minLumaGap || currentLuma > replacementLuma * maxLumaRatio) continue;
+      repaired[index] = {
+        ...current,
+        ...replacement,
+        detailImportance: Math.min(Number(current.detailImportance) || 0, 0.2),
+        fringeRepaired: true
+      };
+    }
+  }
+  return repaired;
+}
